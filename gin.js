@@ -19,10 +19,19 @@ const GIN_STATE_STOPPED = 4;
 
 const GIN_INTERVAL_TOLERANCE = 5;
 
-const VK_SHIFT = 16;
-const VK_CTRL = 17;
-const VK_ALT = 18;
-const VK_CAPSLOCK = 20;
+const GIN_REGEXP_NAME = /^[a-zA-Z_\-][a-zA-Z_0-9\-]*$/;
+const GIN_REGEXP_BLANK = /\s+/;
+const GIN_REGEXP_INT = /^\d+$/;
+const GIN_REGEXP_ANY = /.*/;
+
+const GIN_EVENT_MOUSEMOVE_MAX_HISTORY = 300;
+
+const GIN_FUNC_DUMMY = function() {};
+
+const GIN_VK_SHIFT = 16;
+const GIN_VK_CTRL = 17;
+const GIN_VK_ALT = 18;
+const GIN_VK_CAPSLOCK = 20;
 
 var document = window.document;
 
@@ -38,9 +47,8 @@ var Gin = (function(){
 				return;
 			}
 			
-			settings = settings || {};
-			hooks = hooks || {};
-			
+			var s = settings || {};
+			var h = hooks || {};
 			var element;
 			
 			if (id.nodeType) {
@@ -57,83 +65,76 @@ var Gin = (function(){
 				return;
 			}
 			
-			this._ = {};
-			this._.element = element;
-			element._ = {};
-			element._.core = this;
-			this._.hooks = {};
-			this._.state = GIN_STATE_INIT;
-			this._.framePrepared = false;
-			this._.frameRenderedPerSecond = 0;
-			this._.frameRenderingTimeInSecond = 0;
-			this._.e = {};
-			this._.e.keyStates = [];
-			this._.e.buttonStates = [];
-			this._.e.startTime = Date.now();
-			this._.e.lastTime = this._.e.startTime;
-			this._.e.stats = {};
-			this._.e.stats.frameCount = 0;
-			this._.e.stats.mousemoveCount = 0;
-			this._.e.clientX = 0;
-			this._.e.clientY = 0;
-			this._.e.mouseover = false;
-			this._.e.hasFocus = true;
-			
-			this._.fps = GIN_FPS_DEFAULT;
-			_parseIntSetting.call(this, settings, 'fps', function(value) {
-				if (value < GIN_FPS_MIN || value > GIN_FPS_MAX) {
-					_error('fps setting must in range of ['
-						+ GIN_FPS_MIN + ', ' + GIN_FPS_MAX + ']. [fps: ' + value + ']');
-					return;
+			// initialize gin attributes.
+			var now = Date.now();
+			this._ = {
+				element: element,
+				state: GIN_STATE_INIT,
+				framePrepared: false,
+				frameRenderedPerSecond: 0,
+				frameRenderingTimeInSecond: 0,
+				e: {
+					keyStates: [],
+					buttonStates: [],
+					startTime: now,
+					lastTime: now,
+					stats: {
+						frameCount: 0,
+						mousemoveCount: 0
+					},
+					clientX: 0,
+					clientY: 0,
+					mouseover: false,
+					hasFocus: true,
+				},
+				mousemoveHistory: {
+					current: 0,
+					last: 0,
+					length: 0
+				},
+				fps: _getSetting(s.fps, GIN_FPS_DEFAULT, GIN_REGEXP_INT, function(value) {
+					if (value < GIN_FPS_MIN || value > GIN_FPS_MAX) {
+						_error('fps setting must in range of [' + GIN_FPS_MIN + ', ' + GIN_FPS_MAX + ']. '
+							+ '[fps: ' + value + ']');
+						return;
+					}
+					
+					return value;
+				}),
+				width: _getSetting(s.width, element.clientWidth, GIN_REGEXP_INT, function(value) {
+					if (value <= 0) {
+						return;
+					}
+					
+					element.style.width = value + 'px';
+					element.width = value;
+					return value;
+				}),
+				height: _getSetting(s.height, element.clientHeight, GIN_REGEXP_INT, function(value) {
+					if (value <= 0) {
+						return;
+					}
+					
+					element.style.height = value + 'px';
+					element.height = value;
+					return value;
+				}),
+				autoPause: _getSetting(s.autoPause, false, function(value) {
+					return value === true? value: undefined;
+				}),
+				hooks: {
+					start: _parseHook(h, 'start'),
+					pause: _parseHook(h, 'pause'),
+					stop: _parseHook(h, 'stop'),
+					restart: _parseHook(h, 'restart'),
+					blur: _parseHook(h, 'blur'),
+					focus: _parseHook(h, 'focus')
 				}
-				
-				this._.fps = value;
-			});
+			};
+			
 			this._.interval = 1000. / this._.fps;
 			
-			this._.width = element.clientWidth;
-			_parseIntSetting.call(this, settings, 'width', function(value) {
-				if (value <= 0) {
-					return;
-				}
-				
-				this._.element.style.width = value + 'px';
-				this._.element.width = value;
-				this._.width = value;
-			});
-			
-			this._.height = element.clientHeight;
-			_parseIntSetting.call(this, settings, 'height', function(value) {
-				if (value <= 0) {
-					return;
-				}
-				
-				this._.element.style.height = value + 'px';
-				this._.element.height = value;
-				this._.height = value;
-			});
-			
-			this._.autoPause = false;
-			_parseSetting(this, settings, 'autoPause', function(value) {
-				if (value === true) {
-					this._.autoPause = value;
-				}
-			});
-			
-			var autoStart = true;
-			_parseSetting(this, settings, 'autoStart', function(value) {
-				if (value === false) {
-					autoStart = value;
-				}
-			});
-			
-			this._.hooks.start = _parseHook(hooks, 'start');
-			this._.hooks.pause = _parseHook(hooks, 'pause');
-			this._.hooks.stop = _parseHook(hooks, 'stop');
-			this._.hooks.restart = _parseHook(hooks, 'restart');
-			this._.hooks.blur = _parseHook(hooks, 'blur');
-			this._.hooks.focus = _parseHook(hooks, 'focus');
-			
+			// create root layer. it's the parent of any other layers.
 			var layer = GinLayer.prototype.create({
 				width: this._.width,
 				height: this._.height,
@@ -144,8 +145,8 @@ var Gin = (function(){
 				parent: null,
 				parentElement: element
 			}, {
-				beforerender: hooks.beforerender,
-				render: hooks.render,
+				beforerender: h.beforerender,
+				render: h.render,
 				destroy: function() {
 					this.core().stop();
 				}
@@ -156,26 +157,43 @@ var Gin = (function(){
 				return;
 			}
 			
+			// only this.resize is able to change root layer's width/height.
 			_setFriendMethod(this.resize, layer.width);
 			_setFriendMethod(this.resize, layer.height);
 			this._.layer = layer;
 			
-			element.focus();
-			element.addEventListener('blur', _blurHandler, false);
-			element.addEventListener('focus', _focusHandler, false);
-			element.addEventListener('keydown', _keyboardHandler, false);
-			element.addEventListener('keyup', _keyboardHandler, false);
-			element.addEventListener('mouseover', _mouseCaptureHandler, false);
-			element.addEventListener('mouseout', _mouseCaptureHandler, false);
-			element.addEventListener('mousedown', _mousebuttonHandler, false);
-			element.addEventListener('mouseup', _mousebuttonHandler, false);
-			element.addEventListener('contextmenu', _contextmenuHandler, false);
-			element.addEventListener('mousemove', _mousemoveHandler, false);
+			// receiver is the div receive all keyboard/mouse events
+			var receiver = document.createElement('div');
+			this._.receiver = receiver;
+			receiver._ = {core: this};
+			receiver.style.position = 'absolute';
+			receiver.style.left = 0;
+			receiver.style.top = 0;
+			receiver.style.width = this._.width + 'px';
+			receiver.style.height = this._.height + 'px';
+			receiver.style.zIndex = 10000;
+			receiver.style.outline = 0;
+			receiver.tabIndex = 1;
+			element.appendChild(receiver);
+			
+			receiver.focus();
+			receiver.addEventListener('blur', _blurHandler, false);
+			receiver.addEventListener('focus', _focusHandler, false);
+			receiver.addEventListener('keydown', _keyboardHandler, false);
+			receiver.addEventListener('keyup', _keyboardHandler, false);
+			receiver.addEventListener('mouseover', _mouseCaptureHandler, false);
+			receiver.addEventListener('mouseout', _mouseCaptureHandler, false);
+			receiver.addEventListener('mousedown', _mousebuttonHandler, false);
+			receiver.addEventListener('mouseup', _mousebuttonHandler, false);
+			receiver.addEventListener('contextmenu', _contextmenuHandler, false);
+			receiver.addEventListener('mousemove', _mousemoveHandler, false);
 			
 			var self = this;
 			window.setInterval(function() {self.resize();}, 100);
 			
-			if (autoStart) {
+			if (_getSetting(s.autoStart, true, function(value) {
+				return value === false? value: undefined;
+			})) {
 				this.start();
 			}
 			
@@ -187,6 +205,10 @@ var Gin = (function(){
 		start: function(hook) {
 			if (hook instanceof Function) {
 				this._.hooks.start = hook;
+				return this;
+			}
+			
+			if (this._.state == GIN_STATE_STARTED) {
 				return this;
 			}
 			
@@ -205,46 +227,53 @@ var Gin = (function(){
 			this._.timer = window.setInterval(function() {
 				var now = Date.now();
 				var fps = self._.fps;
+				var e = self._.e;
 				var stats = self._.e.stats;
 				var frameCount = stats.frameCount;
-				var currentSecond = Math.floor(now / 1000);
-				var lastSecond = Math.floor(self._.e.lastTime / 1000);
+				var layer = self.layer();
 				
-				if (currentSecond != lastSecond && frameCount) {
-					_debug('fps: ' + frameCount + '   mousemove per second: ' + stats.mousemoveCount);
-					stats.frameCount = 0;
-					stats.mousemoveCount = 0;
-				}
+				_updateEventStats(e, now);
 				
+				// frame rendered in 1s must be always lower than fps in setting.
 				if (frameCount >= fps && self._.framePrepared) {
 					return;
 				}
 				
-				self._.e.timeStamp = now;
+				e.timeStamp = now;
 				
+				// gin user should put all code independent of canvas context in beforerender handler.
+				// doing this can make best use of client cpu.
 				if (!self._.framePrepared) {
-					self.layer().beforerender();
+					layer.beforerender();
 					self._.framePrepared = true;
 				}
 				
 				now = Date.now();
+				_updateEventStats(e, now);
 				
-				if ((now % 1000) - frameCount * self._.interval + GIN_INTERVAL_TOLERANCE > 0) {
-					self._.e.timeStamp = now;
-					self.layer().render();
+				// start rendering if it's time to do it.
+				if (!frameCount || (now % 1000) - frameCount * self._.interval + GIN_INTERVAL_TOLERANCE >= 0) {
+					e.timeStamp = now;
+					layer.render();
+					layer.updateStyle();
 					
 					stats.frameCount++;
-					self._.e.lastTime = now;
+					e.lastTime = now;
 					self._.framePrepared = false;
 				}
 			}, 1);
 			this._.state = GIN_STATE_STARTED;
+			_debug('gin is started');
 			
 			return this;
 		},
 		pause: function(hook) {
 			if (hook instanceof Function) {
 				this._.hooks.pause = hook;
+				return this;
+			}
+			
+			if (this._.state == GIN_STATE_PAUSED) {
 				return this;
 			}
 			
@@ -260,12 +289,17 @@ var Gin = (function(){
 			
 			this._.hooks.pause.call(this.layer());
 			this._.state = GIN_STATE_PAUSED;
+			_debug('gin is paused');
 			
 			return this;
 		},
 		stop: function(hook) {
 			if (hook instanceof Function) {
 				this._.hooks.stop = hook;
+				return this;
+			}
+			
+			if (this._.state == GIN_STATE_STOPPED) {
 				return this;
 			}
 			
@@ -282,6 +316,8 @@ var Gin = (function(){
 			
 			this._.hooks.stop.call(this.layer());
 			this._.state = GIN_STATE_STOPPED;
+			_debug('gin is stopped');
+			
 			return this;
 		},
 		restart: function(hook) {
@@ -335,10 +371,12 @@ var Gin = (function(){
 			}
 			
 			var element = this._.element;
+			var receiver = this._.receiver;
 			var layer = this.layer();
 			
 			if (w != this._.width) {
 				this._.width = w;
+				receiver.style.width = w + 'px';
 				layer.width(w);
 				
 				if (w != this._.element.clientWidth) {
@@ -349,6 +387,7 @@ var Gin = (function(){
 			
 			if (h != this._.height) {
 				this._.height = h;
+				receiver.style.height = h + 'px';
 				layer.height(h);
 				
 				if (h != this._.element.clientHeight) {
@@ -358,7 +397,12 @@ var Gin = (function(){
 			}
 		},
 		cloneEvent: function() {
-			return _deepClone(this._.e);
+			var e = _deepClone(this._.e);
+			e.mousemoveHistory = this._.mousemoveHistory;
+			e.traverseHistory = _traverseHistory;
+			e.offsetX = e.offsetY = 0;
+
+			return e;
 		}
 	};
 	
@@ -370,103 +414,86 @@ function GinLayer() {}
 GinLayer.prototype = {
 	create: function(settings, hooks) {
 		var layer = new GinLayer();
-		layer._ = {};
-		layer._.hooks = {};
-		layer._.layers = {};
-		layer._.styles = {};
-		layer._.data = {};
-		settings = settings || {};
-		hooks = hooks || {};
-		
-		if (settings.parent !== null && !(settings.parent instanceof GinLayer)) {
+		var s = settings || {};
+		var h = hooks || {};
+
+		if (s.parent !== null && !(s.parent instanceof GinLayer)) {
 			_error('parent must be GinLayer instance or null');
 			return;
 		}
 		
-		layer._.parent = settings.parent;
-		
-		if (!settings.core) {
+		if (!s.core) {
 			_error('core must be set');
 			return;
 		}
-		
-		layer._.core = settings.core;
-		
-		if (!settings.name) {
-			_error('layer must have a name');
+
+		if (!s.name) {
+			_error('layer must have a string name');
 			return;
 		}
 		
-		layer._.name = settings.name;
-		
-		if (!settings.parentElement) {
+		if (!s.parentElement) {
 			_error('parent element must be set when parent is null');
 			return;
 		}
 		
-		layer._.parentElement = settings.parentElement;
-		
 		var element = document.createElement('div');
 		element.style.position = 'absolute';
-		layer._.element = element;
 
-		_parseIntSetting.call(layer, settings, 'width', function(value) {
-			if (value <= 0) {
-				return;
+		layer._ = {
+			name: s.name,
+			parent: s.parent,
+			core: s.core,
+			element: element,
+			parentElement: s.parentElement,
+			layers: {},
+			styles: {},
+			data: {},
+			offsetX: 0,
+			offsetY: 0,
+			width: _getSetting(s.width, 0, GIN_REGEXP_INT, function(value) {
+				if (value <= 0) {
+					return;
+				}
+				
+				element.style.width = value + 'px';
+				return value;
+			}),
+			height: _getSetting(s.height, 0, GIN_REGEXP_INT, function(value) {
+				if (value <= 0) {
+					return;
+				}
+				
+				element.style.height = value + 'px';
+				return value;
+			}),
+			left: _getSetting(s.left, 0, GIN_REGEXP_INT, function(value) {
+				if (value <= 0) {
+					return;
+				}
+				
+				element.style.left = value + 'px';
+				return value;
+			}),
+			top: _getSetting(s.top, 0, GIN_REGEXP_INT, function(value) {
+				if (value <= 0) {
+					return;
+				}
+				
+				element.style.top = value + 'px';
+				return value;
+			}),
+			hooks: {
+				beforerender: _parseHook(h, 'beforerender'),
+				render: _parseHook(h, 'render'),
+				destroy: _parseHook(h, 'destroy')
 			}
-			
-			this._.element.style.width = value + 'px';
-			this._.width = value;
-		});
+		};
 		
-		if (layer._.width === undefined) {
-			layer._.width = layer._.parentElement.clientWidth;
+		if (s.parent) {
+			layer._.offsetX = s.parent.offsetX + s.parent.left;
+			layer._.offsetY = s.parent.offsetY + s.parent.top;
 		}
-
-		_parseIntSetting.call(layer, settings, 'height', function(value) {
-			if (value <= 0) {
-				return;
-			}
-			
-			this._.element.style.height = value + 'px';
-			this._.height = value;
-		});
-		
-		if (layer._.height === undefined) {
-			layer._.height = layer._.parentElement.clientHeight;
-		}
-
-		layer._.left = 0;
-		_parseIntSetting.call(layer, settings, 'left', function(value) {
-			if (value <= 0) {
-				return;
-			}
-			
-			this._.element.style.left = value + 'px';
-			this._.left = value;
-		});
-
-		layer._.top = 0;
-		_parseIntSetting.call(layer, settings, 'top', function(value) {
-			if (value <= 0) {
-				return;
-			}
-			
-			this._.element.style.top = value + 'px';
-			this._.top = value;
-		});
-		
-		if (layer._.parent) {
-			layer._.offsetX = layer._.parent.offsetX + layer._.parent.left;
-			layer._.offsetY = layer._.parent.offsetY + layer._.parent.top;
-		} else {
-			layer._.offsetX = 0;
-			layer._.offsetY = 0;
-		}
-		
-		layer._.hooks.beforerender = _parseHook(hooks, 'beforerender');
-		layer._.hooks.render = _parseHook(hooks, 'render');
-		layer._.hooks.destroy = _parseHook(hooks, 'destroy');
 		
 		var canvas = document.createElement('canvas');
 		canvas.style.width = layer._.width + 'px';
@@ -493,7 +520,7 @@ GinLayer.prototype = {
 			var names = name;
 			
 			if (typeof name === 'string') {
-				names = name.split(_layerBlankRegex);
+				names = name.split(GIN_REGEXP_BLANK);
 			}
 			
 			var topLevelName = names.shift();
@@ -510,16 +537,18 @@ GinLayer.prototype = {
 			}
 		}
 		
-		if (!_layerNameRegex.test(name)) {
+		var s = settings || {};
+		
+		if (!GIN_REGEXP_NAME.test(name)) {
 			_error('invalid layer name. [name: ' + name + ']');
 			return;
 		}
 		
-		settings.parent = this;
-		settings.parentElement = this._.element;
-		settings.core = this.core();
-		settings.name = name;
-		var layer = this.create(settings, hooks);
+		s.parent = this;
+		s.parentElement = this._.element;
+		s.core = this.core();
+		s.name = name;
+		var layer = this.create(s, hooks);
 		
 		if (!layer) {
 			_error('cannot create new layer');
@@ -542,26 +571,25 @@ GinLayer.prototype = {
 		return this._.core;
 	},
 	style: function(property, value) {
-		// TODO: apply style at rendering
+		var styles = this._.styles;
+		
+		// white list mode. only support following styles.
 		switch (property) {
 		case 'width':
 		case 'height':
-			this._.canvas.style[property] = value + 'px';
-			this._.canvas[property] = value;
 		case 'top':
 		case 'left':
-			this._.element.style[property] = value + 'px';
-			this._.element[property] = value;
+			styles[property] = value + 'px';
 		}
 
-		// TODO: finish it
+		return this;
 	},
 	left: function(val) {
 		if (val === undefined) {
 			return this._.left;
 		}
 		
-		if (_layerIntRegex.test(val) && val > 0) {
+		if (GIN_REGEXP_INT.test(val) && val > 0) {
 			this._.left = parseInt(val, 10);
 			this.style('left', this._.left);
 		}
@@ -573,7 +601,7 @@ GinLayer.prototype = {
 			return this._.top;
 		}
 		
-		if (_layerIntRegex.test(val) && val > 0) {
+		if (GIN_REGEXP_INT.test(val) && val > 0) {
 			this._.top = parseInt(val, 10);
 			this.style('top', this._.top);
 		}
@@ -590,7 +618,7 @@ GinLayer.prototype = {
 			return this;
 		}
 		
-		if (_layerIntRegex.test(val) && val > 0) {
+		if (GIN_REGEXP_INT.test(val) && val > 0) {
 			this._.width = parseInt(val, 10);
 			this.style('width', this._.width);
 		}
@@ -607,7 +635,7 @@ GinLayer.prototype = {
 			return this;
 		}
 		
-		if (_layerIntRegex.test(val) && val > 0) {
+		if (GIN_REGEXP_INT.test(val) && val > 0) {
 			this._.height = parseInt(val, 10);
 			this.style('height', this._.height);
 		}
@@ -638,7 +666,7 @@ GinLayer.prototype = {
 			this._.layers[i].beforerender();
 		}
 		
-		if (this._.hooks.beforerender == _dummyCallback) {
+		if (this._.hooks.beforerender == GIN_FUNC_DUMMY) {
 			return this;
 		}
 		
@@ -651,7 +679,7 @@ GinLayer.prototype = {
 			return this;
 		}
 		
-		if (this._.hooks.render != _dummyCallback) {
+		if (this._.hooks.render != GIN_FUNC_DUMMY) {
 			this.draw(this._.hooks.render);
 		}
 		
@@ -683,9 +711,24 @@ GinLayer.prototype = {
 		}
 		
 		var styles = this._.styles;
+		var element = this._.element;
+		var canvas = this._.canvas;
 		
 		for (var i in styles) {
 			this._.element.style[i] = styles[i];
+		}
+		
+		for (var i in styles) {
+			switch (i) {
+			case 'top':
+			case 'left':
+				break;
+			case 'width':
+			case 'height':
+				canvas[i] = parseInt(styles[i], 10);
+			default:
+				canvas.style[i] = styles[i];
+			}
 		}
 		
 		this._.styles = {};
@@ -722,14 +765,16 @@ GinLayer.prototype = {
 	}
 };
 
-var _layerNameRegex = /^[a-zA-Z_\-][a-zA-Z_0-9\-]*$/;
-var _layerBlankRegex = /\s+/;
-var _layerIntRegex = /^\d+$/;
+function GinEvent() {}
+GinEvent.prototype = {
+	create: function(e) {
+	},
+};
 
 var _specialKeys = [];
-_specialKeys[VK_SHIFT] = true;
-_specialKeys[VK_CTRL] = true;
-_specialKeys[VK_ALT] = true;
+_specialKeys[GIN_VK_SHIFT] = true;
+_specialKeys[GIN_VK_CTRL] = true;
+_specialKeys[GIN_VK_ALT] = true;
 
 function _deepClone(obj) {
 	var newObject = new obj.constructor();
@@ -745,36 +790,43 @@ function _deepClone(obj) {
 };
 
 var _debug = function() {
-	if (console) {
-		try {
-			console.debug.apply(console, arguments);
-		} catch (e) {
-		}
+	try {
+		console.debug.apply(console, arguments);
+	} catch (e) {
 	}
 };
 
 var _error = function() {
-	if (console) {
-		try {
-			console.error.apply(console, arguments);
-		} catch (e) {
-		}
+	try {
+		console.error.apply(console, arguments);
+	} catch (e) {
 	}
 };
 
-var _parseSetting = function(settings, item, action) {
-	if (settings[item] !== undefined && action instanceof Function) {
-		return action.call(this, settings[item]);
-	}
-};
-
-var _parseIntSetting = function(settings, item, action) {
-	var value = settings[item];
+var _updateEventStats = function(e, now) {
+	var stats = e.stats;
+	var frameCount = stats.frameCount;
+	var currentSecond = Math.floor(now / 1000);
+	var lastSecond = Math.floor(e.lastTime / 1000);
 	
-	if (value !== undefined && _layerIntRegex.test(value)
-		&& action instanceof Function) {
-		return action.call(this, value);
+	if (currentSecond != lastSecond && frameCount) {
+		_debug('fps: ' + frameCount + '   mousemove per second: ' + stats.mousemoveCount);
+		stats.frameCount = 0;
+		stats.mousemoveCount = 0;
 	}
+};
+
+var _getSetting = function(value, defValue, regexp, action) {
+	var r = regexp instanceof RegExp? regexp: null;
+	var a = action instanceof Function? action:
+		regexp instanceof Function? regexp: GIN_FUNC_DUMMY;
+	var val;
+	
+	if (value !== undefined && (!r || r.test(value))) {
+		val = a(value);
+	}
+	
+	return val === undefined? defValue: val;
 };
 
 var _parseHook = function(hooks, item) {
@@ -782,7 +834,7 @@ var _parseHook = function(hooks, item) {
 		return hooks[item];
 	}
 	
-	return _dummyCallback;
+	return GIN_FUNC_DUMMY;
 };
 
 var _keyboardHandler = function(e) {
@@ -812,11 +864,29 @@ var _mousemoveHandler = function(e) {
 	}
 	
 	var evt = this._.core._.e;
-	evt.clientX = e.clientX;
-	evt.clientY = e.clientY;
-	evt.mouseover = true;
-
-	evt.stats.mousemoveCount++;
+	var history = this._.core._.mousemoveHistory;
+	var last = history[history.last];
+	
+	if (!last || last.clientX != e.clientX || last.clientY != e.clientY) {
+		evt.clientX = e.clientX;
+		evt.clientY = e.clientY;
+		evt.mouseover = true;
+		evt.stats.mousemoveCount++;
+		
+		history.current = (history.current + 1) % GIN_EVENT_MOUSEMOVE_MAX_HISTORY;
+		history.length = history.length < GIN_EVENT_MOUSEMOVE_MAX_HISTORY?
+			history.length + 1: GIN_EVENT_MOUSEMOVE_MAX_HISTORY;
+		
+		if (history.current == history.last) {
+			history.last++;
+		}
+		
+		history[history.current] = {
+			clientX: e.clientX,
+			clientY: e.clientY,
+			timeStamp: Date.now()
+		};
+	}
 };
 
 var _mousebuttonHandler = function(e) {
@@ -825,11 +895,13 @@ var _mousebuttonHandler = function(e) {
 		return;
 	}
 	
-	_mousemoveHandler.call(this, e);
-	
 	var evt = this._.core._.e;
 	var isDown = e.type === 'mousedown'? true: false;
 	evt.buttonStates[e.button] = isDown;
+	
+	if (isDown) {
+		e.preventDefault();
+	}
 };
 
 var _mouseCaptureHandler = function(e) {
@@ -837,8 +909,6 @@ var _mouseCaptureHandler = function(e) {
 		_error('cannot find GinCore information');
 		return;
 	}
-	
-	_mousemoveHandler.call(this, e);
 	
 	var evt = this._.core._.e;
 	evt.mouseover = evt.type == 'mouseover'? true: false;
@@ -879,10 +949,45 @@ var _cloneEvent = function() {
 		this._.offsetY = this._.parent.offsetY + this._.parent.top;
 	}
 	
-	e.clientX -= this._.offsetX + this._.left;
-	e.clientY -= this._.offsetY + this._.top;
+	e.offsetX = this._.offsetX + this._.left;
+	e.offsetY = this._.offsetY + this._.top;
+	e.clientX -= e.offsetX;
+	e.clientY -= e.offsetY;
+	e.layer = this;
 	
 	return e;
+};
+
+// traverse all mouse move events since last rendering.
+// it will reset mousemoveHistory last position.
+var _traverseHistory = function(callback) {
+	if (!this.mousemoveHistory || !(callback instanceof Function)) {
+		return this;
+	}
+	
+	var history = this.mousemoveHistory;
+	var current = history.current;
+	var last = history.last;
+	
+	// history is empty.
+	if (current == last) {
+		return this;
+	}
+	
+	var i = last;
+	
+	do {
+		i = (i + 1) % GIN_EVENT_MOUSEMOVE_MAX_HISTORY;
+		callback.call(this.layer, {
+			clientX: history[i].clientX - this.offsetX,
+			clientY: history[i].clientY - this.offsetY,
+			timeStamp: history[i].timeStamp
+		});
+	} while (i != current);
+	
+	history.last = history.current;
+	
+	return this;
 };
 
 var _setFriendMethod = function(caller, callee) {
@@ -914,8 +1019,6 @@ var _verifyFriendMethod = function(args) {
 		return false;
 	}
 };
-
-var _dummyCallback = function() {};
 
 var _emptyObject = function(obj) {
 	if (obj instanceof Array) {

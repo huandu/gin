@@ -1,8 +1,8 @@
-﻿h1. About gin
+﻿h2. What's the gin
 
-h2. What's the gin
+The <code>gin</code> is a Game Interactive eNgine. It's designed for HTML5 games on modern browser.
 
-The <code>gin</code> stands for Game Interactive eNgine. It's a gaming engine for HTML5 games.
+Gin is also a kind of distilled beverage. I've never tried this. It looks pretty good.
 
 h3. Goals
 
@@ -10,8 +10,14 @@ The major goal is to implement most common features required by game developers.
 
 With this engine, programmers should be able to focus on game logic and graphic effects, just like programming in flash.
 
-I may add hit test and WebGL support in this engine, but it's not certain.
+I may add hit test and WebGL support in it, but it's not certain at this point.
 
 h3. Non-Goals
 
 It will never include any canvas scene graph api.
+
+h2. Browser Compatability
+
+The <code>gin</code> is tested on
+* Chrome 8/10
+* Firefox 3.6
