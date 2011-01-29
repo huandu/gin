@@ -1,0 +1,19 @@
+﻿h1. About gin
+
+{{>toc}}
+
+h2. What's the gin
+
+The <code>gin</code> stands for Game Interactive eNgine. It's a gaming engine for HTML5 games.
+
+h3. Goals
+
+The major goal is to implement most common features required by game developers. It will include animation timeline, graphic layers and mouse/gesture/keyboard input emcapsulation.
+
+With this engine, programmers should be able to focus on game logic and graphic effects, just like programming in flash.
+
+I may add hit test and WebGL support in this engine, but it's not certain.
+
+h3. Non-Goals
+
+It will never include any canvas scene graph api.
