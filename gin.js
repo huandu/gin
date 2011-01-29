@@ -71,10 +71,13 @@ var Gin = (function(){
 			this._.e.buttonStates = [];
 			this._.e.startTime = Date.now();
 			this._.e.lastTime = this._.e.startTime;
-			this._.e.frameCount = 0;
+			this._.e.stats = {};
+			this._.e.stats.frameCount = 0;
+			this._.e.stats.mousemoveCount = 0;
 			this._.e.clientX = 0;
 			this._.e.clientY = 0;
 			this._.e.mouseover = false;
+			this._.e.hasFocus = true;
 			
 			this._.fps = GIN_FPS_DEFAULT;
 			_parseIntSetting.call(this, settings, 'fps', function(value) {
@@ -95,6 +98,7 @@ var Gin = (function(){
 				}
 				
 				this._.element.style.width = value + 'px';
+				this._.element.width = value;
 				this._.width = value;
 			});
 			
@@ -105,18 +109,19 @@ var Gin = (function(){
 				}
 				
 				this._.element.style.height = value + 'px';
+				this._.element.height = value;
 				this._.height = value;
 			});
 			
 			this._.autoPause = false;
-			_parseSetting(settings, 'autoPause', function(value) {
+			_parseSetting(this, settings, 'autoPause', function(value) {
 				if (value === true) {
 					this._.autoPause = value;
 				}
 			});
 			
 			var autoStart = true;
-			_parseSetting(settings, 'autoStart', function(value) {
+			_parseSetting(this, settings, 'autoStart', function(value) {
 				if (value === false) {
 					autoStart = value;
 				}
@@ -151,18 +156,24 @@ var Gin = (function(){
 				return;
 			}
 			
+			_setFriendMethod(this.resize, layer.width);
+			_setFriendMethod(this.resize, layer.height);
 			this._.layer = layer;
 			
 			element.focus();
-			element.addEventListener('keydown', _keyboardHandler, false);
-			element.addEventListener('keyup', _keyboardHandler, false);
 			element.addEventListener('blur', _blurHandler, false);
 			element.addEventListener('focus', _focusHandler, false);
+			element.addEventListener('keydown', _keyboardHandler, false);
+			element.addEventListener('keyup', _keyboardHandler, false);
 			element.addEventListener('mouseover', _mouseCaptureHandler, false);
 			element.addEventListener('mouseout', _mouseCaptureHandler, false);
 			element.addEventListener('mousedown', _mousebuttonHandler, false);
 			element.addEventListener('mouseup', _mousebuttonHandler, false);
+			element.addEventListener('contextmenu', _contextmenuHandler, false);
 			element.addEventListener('mousemove', _mousemoveHandler, false);
+			
+			var self = this;
+			window.setInterval(function() {self.resize();}, 100);
 			
 			if (autoStart) {
 				this.start();
@@ -194,13 +205,15 @@ var Gin = (function(){
 			this._.timer = window.setInterval(function() {
 				var now = Date.now();
 				var fps = self._.fps;
-				var frameCount = self._.e.frameCount;
+				var stats = self._.e.stats;
+				var frameCount = stats.frameCount;
 				var currentSecond = Math.floor(now / 1000);
 				var lastSecond = Math.floor(self._.e.lastTime / 1000);
 				
-				if (currentSecond != lastSecond && self._.e.frameCount) {
-					_debug('fps: ' + self._.e.frameCount);
-					self._.e.frameCount = 0;
+				if (currentSecond != lastSecond && frameCount) {
+					_debug('fps: ' + frameCount + '   mousemove per second: ' + stats.mousemoveCount);
+					stats.frameCount = 0;
+					stats.mousemoveCount = 0;
 				}
 				
 				if (frameCount >= fps && self._.framePrepared) {
@@ -220,7 +233,7 @@ var Gin = (function(){
 					self._.e.timeStamp = now;
 					self.layer().render();
 					
-					self._.e.frameCount++;
+					stats.frameCount++;
 					self._.e.lastTime = now;
 					self._.framePrepared = false;
 				}
@@ -294,6 +307,8 @@ var Gin = (function(){
 				return this;
 			}
 			
+			this._.e.hasFocus = false;
+			
 			if (this._.autoPause) {
 				this.pause();
 			}
@@ -304,9 +319,42 @@ var Gin = (function(){
 				return this;
 			}
 			
+			this._.e.hasFocus = true;
 			
 			if (this._.autoPause) {
 				this.start();
+			}
+		},
+		resize: function(width, height) {
+			var w = width || this._.element.clientWidth;
+			var h = height || this._.element.clientHeight;
+			
+			if (isNaN(w) || w < 0 || isNaN(h) || h < 0) {
+				_error('invalid width or height');
+				return this;
+			}
+			
+			var element = this._.element;
+			var layer = this.layer();
+			
+			if (w != this._.width) {
+				this._.width = w;
+				layer.width(w);
+				
+				if (w != this._.element.clientWidth) {
+					element.style.width = w + 'px';
+					element.width = w;
+				}
+			}
+			
+			if (h != this._.height) {
+				this._.height = h;
+				layer.height(h);
+				
+				if (h != this._.element.clientHeight) {
+					element.style.height = h + 'px';
+					element.height = h;
+				}
 			}
 		},
 		cloneEvent: function() {
@@ -494,6 +542,18 @@ GinLayer.prototype = {
 		return this._.core;
 	},
 	style: function(property, value) {
+		// TODO: apply style at rendering
+		switch (property) {
+		case 'width':
+		case 'height':
+			this._.canvas.style[property] = value + 'px';
+			this._.canvas[property] = value;
+		case 'top':
+		case 'left':
+			this._.element.style[property] = value + 'px';
+			this._.element[property] = value;
+		}
+
 		// TODO: finish it
 	},
 	left: function(val) {
@@ -503,7 +563,7 @@ GinLayer.prototype = {
 		
 		if (_layerIntRegex.test(val) && val > 0) {
 			this._.left = parseInt(val, 10);
-			this.style('left', this._.left + 'px');
+			this.style('left', this._.left);
 		}
 		
 		return this;
@@ -515,7 +575,7 @@ GinLayer.prototype = {
 		
 		if (_layerIntRegex.test(val) && val > 0) {
 			this._.top = parseInt(val, 10);
-			this.style('top', this._.top + 'px');
+			this.style('top', this._.top);
 		}
 		
 		return this;
@@ -525,9 +585,14 @@ GinLayer.prototype = {
 			return this._.width;
 		}
 		
+		if (!this._.parent && !_verifyFriendMethod(arguments)) {
+			_error('unauthorized call to this function');
+			return this;
+		}
+		
 		if (_layerIntRegex.test(val) && val > 0) {
 			this._.width = parseInt(val, 10);
-			this.style('width', this._.width + 'px');
+			this.style('width', this._.width);
 		}
 		
 		return this;
@@ -537,9 +602,14 @@ GinLayer.prototype = {
 			return this._.height;
 		}
 		
+		if (!this._.parent && !_verifyFriendMethod(arguments)) {
+			_error('unauthorized call to this function');
+			return this;
+		}
+		
 		if (_layerIntRegex.test(val) && val > 0) {
 			this._.height = parseInt(val, 10);
-			this.style('height', this._.height + 'px');
+			this.style('height', this._.height);
 		}
 		
 		return this;
@@ -694,7 +764,7 @@ var _error = function() {
 
 var _parseSetting = function(settings, item, action) {
 	if (settings[item] !== undefined && action instanceof Function) {
-		return action.call(this, value);
+		return action.call(this, settings[item]);
 	}
 };
 
@@ -716,8 +786,6 @@ var _parseHook = function(hooks, item) {
 };
 
 var _keyboardHandler = function(e) {
-	e = e || window.event;
-	
 	if (!this._ || !this._.core) {
 		_error('cannot find GinCore information');
 		return;
@@ -737,24 +805,7 @@ var _keyboardHandler = function(e) {
 	evt.metaKey = e.metaKey;
 };
 
-var _mousebuttonHandler = function(e) {
-	e = e || window.event;
-	
-	if (!this._ || !this._.core) {
-		_error('cannot find GinCore information');
-		return;
-	}
-	
-	var evt = this._.core._.e;
-	var isDown = e.type === 'mousedown'? true: false;
-	e.stopPropagation();
-	
-	evt.buttonStates[e.button] = isDown;
-};
-
 var _mousemoveHandler = function(e) {
-	e = e || window.event;
-	
 	if (!this._ || !this._.core) {
 		_error('cannot find GinCore information');
 		return;
@@ -764,15 +815,30 @@ var _mousemoveHandler = function(e) {
 	evt.clientX = e.clientX;
 	evt.clientY = e.clientY;
 	evt.mouseover = true;
+
+	evt.stats.mousemoveCount++;
 };
 
-var _mouseCaptureHandler = function(e) {
-	e = e || window.event;
-	
+var _mousebuttonHandler = function(e) {
 	if (!this._ || !this._.core) {
 		_error('cannot find GinCore information');
 		return;
 	}
+	
+	_mousemoveHandler.call(this, e);
+	
+	var evt = this._.core._.e;
+	var isDown = e.type === 'mousedown'? true: false;
+	evt.buttonStates[e.button] = isDown;
+};
+
+var _mouseCaptureHandler = function(e) {
+	if (!this._ || !this._.core) {
+		_error('cannot find GinCore information');
+		return;
+	}
+	
+	_mousemoveHandler.call(this, e);
 	
 	var evt = this._.core._.e;
 	evt.mouseover = evt.type == 'mouseover'? true: false;
@@ -782,9 +848,11 @@ var _mouseCaptureHandler = function(e) {
 	}
 };
 
+var _contextmenuHandler = function(e) {
+	e.preventDefault();
+};
+
 var _blurHandler = function(e) {
-	e = e || window.event;
-	
 	if (!this._ || !this._.core) {
 		_error('cannot find GinCore information');
 		return;
@@ -794,8 +862,6 @@ var _blurHandler = function(e) {
 };
 
 var _focusHandler = function(e) {
-	e = e || window.event;
-	
 	if (!this._ || !this._.core) {
 		_error('cannot find GinCore information');
 		return;
@@ -817,6 +883,36 @@ var _cloneEvent = function() {
 	e.clientY -= this._.offsetY + this._.top;
 	
 	return e;
+};
+
+var _setFriendMethod = function(caller, callee) {
+	caller._friends = caller._friends || [];
+	caller._friends.push(callee.toString());
+	return caller;
+};
+
+var _verifyFriendMethod = function(args) {
+	try {
+		var callee = args.callee;
+		var caller = callee.caller
+		
+		if (!caller || !caller._friends) {
+			return false;
+		}
+		
+		var calleeString = callee.toString();
+		var friends = caller._friends;
+		
+		for (var i in friends) {
+			if (friends[i] === calleeString) {
+				return true;
+			}
+		}
+		
+		return false;
+	} catch (e) {
+		return false;
+	}
 };
 
 var _dummyCallback = function() {};

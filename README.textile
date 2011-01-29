@@ -1,7 +1,5 @@
 ﻿h1. About gin
 
-{{>toc}}
-
 h2. What's the gin
 
 The <code>gin</code> stands for Game Interactive eNgine. It's a gaming engine for HTML5 games.
