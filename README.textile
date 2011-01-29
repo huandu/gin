@@ -1,4 +1,7 @@
-﻿h2. What's the gin
+﻿
+h1. About 'gin'
+
+h2. What's the gin
 
 The <code>gin</code> is a Game Interactive eNgine. It's designed for HTML5 games on modern browser.
 
@@ -6,7 +9,7 @@ Gin is also a kind of distilled beverage. I've never tried this. It looks pretty
 
 h3. Goals
 
-The major goal is to implement most common features required by game developers. It will include animation timeline, graphic layers and mouse/gesture/keyboard input emcapsulation.
+The major goal is to implement most common features required by HTML5 game developers. It will include animation timeline, graphic layers and mouse/gesture/keyboard input implementation.
 
 With this engine, programmers should be able to focus on game logic and graphic effects, just like programming in flash.
 
