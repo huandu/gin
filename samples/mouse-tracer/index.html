@@ -118,6 +118,8 @@ var gin = $G('device', {
 					dots.create(history.clientX, history.clientY);
 				}
 			});
+		} else {
+			e.clearHistory();
 		}
 		
 		var ctx = e.context;

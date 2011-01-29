@@ -400,6 +400,7 @@ var Gin = (function(){
 			var e = _deepClone(this._.e);
 			e.mousemoveHistory = this._.mousemoveHistory;
 			e.traverseHistory = _traverseHistory;
+			e.clearHistory = _clearHistory;
 			e.offsetX = e.offsetY = 0;
 
 			return e;
@@ -987,6 +988,16 @@ var _traverseHistory = function(callback) {
 	
 	history.last = history.current;
 	
+	return this;
+};
+
+var _clearHistory = function() {
+	if (!this.mousemoveHistory) {
+		return this;
+	}
+	
+	var history = this.mousemoveHistory;
+	history.last = history.current;
 	return this;
 };
 
