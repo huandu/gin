@@ -1,4 +1,4 @@
-﻿Welcome to send me feedback in github or [[@huandu|http://twitter.com/huandu]] on twitter.
+﻿Welcome to send me feedback in github or "@huandu":http://twitter.com/huandu on twitter.
 
 h2. What's the gin
 
