@@ -80,7 +80,9 @@ var Gin = (function(){
 					lastTime: now,
 					stats: {
 						frameCount: 0,
-						mousemoveCount: 0
+						mousemoveCount: 0,
+						fps: 0,
+						mps: 0
 					},
 					clientX: 0,
 					clientY: 0,
@@ -90,6 +92,7 @@ var Gin = (function(){
 				mousemoveHistory: {
 					current: 0,
 					last: 0,
+					traverseLast: 0,
 					length: 0
 				},
 				fps: _getSetting(s.fps, GIN_FPS_DEFAULT, GIN_REGEXP_INT, function(value) {
@@ -231,6 +234,7 @@ var Gin = (function(){
 				var stats = self._.e.stats;
 				var frameCount = stats.frameCount;
 				var layer = self.layer();
+				var history = self._.mousemoveHistory;
 				
 				_updateEventStats(e, now);
 				
@@ -244,6 +248,7 @@ var Gin = (function(){
 				// gin user should put all code independent of canvas context in beforerender handler.
 				// doing this can make best use of client cpu.
 				if (!self._.framePrepared) {
+					history.traverseLast = history.last;
 					layer.beforerender();
 					self._.framePrepared = true;
 				}
@@ -254,6 +259,7 @@ var Gin = (function(){
 				// start rendering if it's time to do it.
 				if (!frameCount || (now % 1000) - frameCount * self._.interval + GIN_INTERVAL_TOLERANCE >= 0) {
 					e.timeStamp = now;
+					history.traverseLast = history.last;
 					layer.render();
 					layer.updateStyle();
 					
@@ -452,6 +458,14 @@ GinLayer.prototype = {
 			data: {},
 			offsetX: 0,
 			offsetY: 0,
+			attachment: _getSetting(s.attachment, null, function(value) {
+				if (!value || !value.nodeType) {
+					_error('attachment must be a DOM element');
+					return;
+				}
+				
+				return value;
+			}),
 			width: _getSetting(s.width, 0, GIN_REGEXP_INT, function(value) {
 				if (value <= 0) {
 					return;
@@ -496,7 +510,14 @@ GinLayer.prototype = {
 			layer._.offsetY = s.parent.offsetY + s.parent.top;
 		}
 		
+		if (layer._.attachment) {
+			element.appendChild(layer._.attachment);
+		}
+		
 		var canvas = document.createElement('canvas');
+		canvas.style.position = 'absolute';
+		canvas.style.left = 0;
+		canvas.style.top = 0;
 		canvas.style.width = layer._.width + 'px';
 		canvas.style.height = layer._.height + 'px';
 		canvas.width = layer._.width;
@@ -811,7 +832,8 @@ var _updateEventStats = function(e, now) {
 	var lastSecond = Math.floor(e.lastTime / 1000);
 	
 	if (currentSecond != lastSecond && frameCount) {
-		_debug('fps: ' + frameCount + '   mousemove per second: ' + stats.mousemoveCount);
+		stats.fps = frameCount;
+		stats.mps = stats.mousemoveCount;
 		stats.frameCount = 0;
 		stats.mousemoveCount = 0;
 	}
@@ -960,7 +982,6 @@ var _cloneEvent = function() {
 };
 
 // traverse all mouse move events since last rendering.
-// it will reset mousemoveHistory last position.
 var _traverseHistory = function(callback) {
 	if (!this.mousemoveHistory || !(callback instanceof Function)) {
 		return this;
@@ -968,7 +989,7 @@ var _traverseHistory = function(callback) {
 	
 	var history = this.mousemoveHistory;
 	var current = history.current;
-	var last = history.last;
+	var last = history.traverseLast;
 	
 	// history is empty.
 	if (current == last) {
@@ -986,18 +1007,25 @@ var _traverseHistory = function(callback) {
 		});
 	} while (i != current);
 	
-	history.last = history.current;
-	
 	return this;
 };
 
-var _clearHistory = function() {
+// clear mouse move history.
+// by default, it will not clear history until calling next beforerender/render.
+// set immediate to true will clear history now. it's not recommended as
+// the rendering sequence is uncertain.
+var _clearHistory = function(immediate) {
 	if (!this.mousemoveHistory) {
 		return this;
 	}
 	
 	var history = this.mousemoveHistory;
 	history.last = history.current;
+	
+	if (immediate) {
+		history.traverseLast = history.current;
+	}
+	
 	return this;
 };
 

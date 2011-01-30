@@ -13,121 +13,233 @@ body {
  margin: 0;
  height: 100%;
  background-color: #000000;
+ font-family: Arial,sans-serif;
+}
+
+#stats {
+ position: absolute;
+ z-index: 100;
+ background-color: rgba(255, 255, 255, 0.7);
+ border: 2px solid #999999;
+ width: 155px;
+ -moz-border-radius: 8px;
+ border-radius: 8px;
+}
+
+#stats, #stats li {
+ margin: 0;
+ padding: 0;
+}
+
+#stats li {
+ list-style: none;
+}
+
+#stats li span {
+ margin: 2px;
+ font-size: 12px;
+}
+
+#stats li span:first-child {
+ width: 90px;
+ display: inline-block;
+}
+
+#fps, #mps, #status {
+ font-weight: bold;
 }
 </style>
-</head>
-<body id="device">
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.4/jquery.min.js"></script>
 <script type="text/javascript" src="../../gin.js"></script>
 <script type="text/javascript">
-function Bubbles() {}
-Bubbles.prototype = {
-	bubbles: [],
-	render: function(ctx) {
-		for (var i in this.bubbles) {
-			var bubble = this.bubbles[i];
-			
-			ctx.beginPath();
-			ctx.strokeStyle = 'rgba(' + bubble.r + ',' + bubble.g + ',' + bubble.b + ','
-				+ Math.min(.4, bubble.life * 0.01) + ')';
-			ctx.lineWidth = bubble.w;
-			ctx.arc(bubble.x, bubble.y, (bubble.radius += bubble.step), 0, Math.PI * 2, true);
-			ctx.stroke();
-			
-			bubble.life--;
-			
-			if (!bubble.life) {
-				delete this.bubbles[i];
-			}
-		}
-	},
-	create: function(x, y) {
-		this.bubbles.push(this._random(
-			x + 7 - Math.floor(Math.random() * 14),
-			y + 7 - Math.floor(Math.random() * 14)));
-		return this;
-	},
-	_random: function(x, y) {
-		return {
-			radius: Math.floor(Math.random() * 20) + 10,
-			x: x,
-			y: y,
-			r: Math.floor(Math.random() * 255),
-			g: Math.floor(Math.random() * 255),
-			b: Math.floor(Math.random() * 255),
-			w: Math.floor(Math.random() * 4) + 1,
-			step: Math.floor(Math.random() * 10) + 2,
-			life: Math.floor(Math.random() * 25) + 20
-		};
-	}
-};
-
-function Dots() {}
-Dots.prototype = {
-	dots: [],
-	create: function(x, y) {
-		this.dots.push({
-			radius: Math.floor(Math.random() * 4) + 2,
-			x: x,
-			y: y,
-			r: Math.floor(Math.random() * 255),
-			g: Math.floor(Math.random() * 255),
-			b: Math.floor(Math.random() * 255),
-			life: Math.floor(Math.random() * 25) + 20
-		});
-	},
-	render: function(ctx) {
-		for (var i in this.dots) {
-			var dot = this.dots[i];
-			
-			ctx.beginPath();
-			ctx.fillStyle = 'rgba(' + dot.r + ',' + dot.g + ',' + dot.b + ','
-				+ Math.min(1, dot.life * 0.04) + ')';
-			ctx.arc(dot.x, dot.y, dot.radius, 0, Math.PI * 2, true);
-			ctx.fill();
-			
-			dot.life--;
-			
-			if (!dot.life) {
-				delete this.dots[i];
-			}
-		}
-	}
-};
-
-const MOUSE_LBUTTON = 0;
-
-var gin = $G('device', {
-	fps: 30,
-	autoResize: true,
-}, {
-	start: function(){
-		var bubbles = new Bubbles();
-		var dots = new Dots();
-		this.data('bubbles', bubbles);
-		this.data('dots', dots);
-	},
-	render: function(e) {
-		var bubbles = this.data('bubbles');
-		var dots = this.data('dots');
-		
-		if (e.mouseover && e.hasFocus) {
-			e.traverseHistory(function(history) {
-				bubbles.create(history.clientX, history.clientY);
+$(function() {
+	function Bubbles() {}
+	Bubbles.prototype = {
+		bubbles: [],
+		render: function(ctx) {
+			for (var i in this.bubbles) {
+				var bubble = this.bubbles[i];
 				
-				if (e.buttonStates[MOUSE_LBUTTON]) {
-					dots.create(history.clientX, history.clientY);
+				ctx.beginPath();
+				ctx.strokeStyle = 'rgba(' + bubble.r + ',' + bubble.g + ',' + bubble.b + ','
+					+ Math.min(.4, bubble.life * 0.01) + ')';
+				ctx.lineWidth = bubble.w;
+				ctx.arc(bubble.x, bubble.y, (bubble.radius += bubble.step), 0, Math.PI * 2, true);
+				ctx.stroke();
+				
+				bubble.life--;
+				
+				if (!bubble.life) {
+					delete this.bubbles[i];
 				}
+			}
+		},
+		create: function(x, y) {
+			this.bubbles.push(this._random(
+				x + 7 - Math.floor(Math.random() * 14),
+				y + 7 - Math.floor(Math.random() * 14)));
+			return this;
+		},
+		_random: function(x, y) {
+			return {
+				radius: Math.floor(Math.random() * 20) + 10,
+				x: x,
+				y: y,
+				r: Math.floor(Math.random() * 255),
+				g: Math.floor(Math.random() * 255),
+				b: Math.floor(Math.random() * 255),
+				w: Math.floor(Math.random() * 4) + 1,
+				step: Math.floor(Math.random() * 10) + 2,
+				life: Math.floor(Math.random() * 25) + 20
+			};
+		}
+	};
+
+	function Dots() {}
+	Dots.prototype = {
+		dots: [],
+		create: function(x, y, solid) {
+			this.dots.push({
+				radius: Math.floor(Math.random() * 4) + 2,
+				x: x,
+				y: y,
+				r: Math.floor(Math.random() * 255),
+				g: Math.floor(Math.random() * 255),
+				b: Math.floor(Math.random() * 255),
+				life: 30,
+				solid: solid? true: false
 			});
-		} else {
-			e.clearHistory();
+		},
+		render: function(ctx) {
+			var previous = null;
+			
+			for (var i in this.dots) {
+				var dot = this.dots[i];
+				var style = 'rgba(' + dot.r + ',' + dot.g + ',' + dot.b + ','
+					+ Math.min(1, dot.life * 0.04) + ')';
+				
+				if (previous) {
+					ctx.beginPath();
+					ctx.lineWidth = 1;
+					ctx.strokeStyle = style;
+					ctx.moveTo(previous.x, previous.y);
+					ctx.lineTo(dot.x, dot.y);
+					ctx.stroke();
+				}
+				
+				ctx.beginPath();
+				if (dot.solid) {
+					ctx.fillStyle = style;
+					ctx.arc(dot.x, dot.y, dot.radius, 0, Math.PI * 2, true);
+					ctx.fill();
+				} else {
+					ctx.strokeStyle = style;
+					ctx.lineWidth = 1;
+					ctx.arc(dot.x, dot.y, dot.radius + 2, 0, Math.PI * 2, true);
+					ctx.stroke();
+				}
+				
+				dot.life--;
+				previous = {
+					x: dot.x,
+					y: dot.y
+				};
+				
+				if (!dot.life) {
+					delete this.dots[i];
+				}
+			}
+		}
+	};
+
+	const MOUSE_LBUTTON = 0;
+	const MOUSE_RBUTTON = 2;
+	
+	const STATUS_STOPPED = 0;
+	const STATUS_RUNNING = 1;
+	const STATUS_LOST_FOCUS = 2;
+	var statusMsg = [
+		'stopped', 'running', 'lost focus'
+	];
+	
+	var stats = {
+		fps: 0,
+		mps: 0,
+		status: STATUS_STOPPED
+	};
+	
+	var _updateStats = function($stats, s, hasFocus) {
+		if (s.fps != stats.fps) {
+			$('#fps', $stats).text(s.fps);
+			stats.fps = s.fps;
 		}
 		
-		var ctx = e.context;
-		ctx.clearRect(0, 0, this.width(), this.height());
-		bubbles.render(e.context);
-		dots.render(e.context);
-	},
+		if (s.mps != stats.mps) {
+			$('#mps', $stats).text(s.mps);
+			stats.mps = s.mps;
+		}
+		
+		var status = hasFocus? STATUS_RUNNING: STATUS_LOST_FOCUS;
+		
+		if (stats.status != status) {
+			$('#status', $stats).text(statusMsg[status]);
+			stats.status = status;
+		}
+	};
+
+	var gin = $G('device', {
+		fps: 30,
+		autoResize: true,
+	}, {
+		start: function(){
+			var bubbles = new Bubbles();
+			var dots = new Dots();
+			this.data('bubbles', bubbles);
+			this.data('dots', dots);
+			this.layers('status', {
+				left: 5,
+				top: 5,
+				attachment: $('#stats').detach()[0]
+			});
+			
+			this.data('stats', $('#stats').show());
+		},
+		render: function(e) {
+			var bubbles = this.data('bubbles');
+			var dots = this.data('dots');
+			
+			if (e.mouseover && e.hasFocus) {
+				e.traverseHistory(function(history) {
+					bubbles.create(history.clientX, history.clientY);
+					
+					if (e.buttonStates[MOUSE_LBUTTON]) {
+						dots.create(history.clientX, history.clientY, true);
+					}
+					
+					if (e.buttonStates[MOUSE_RBUTTON]) {
+						dots.create(history.clientX, history.clientY);
+					}
+				});
+			}
+			
+			e.clearHistory();
+			
+			var ctx = e.context;
+			ctx.clearRect(0, 0, this.width(), this.height());
+			bubbles.render(e.context);
+			dots.render(e.context);
+			
+			_updateStats(this.data('stats'), e.stats, e.hasFocus);
+		},
+	});
 });
 </script>
+</head>
+<body id="device">
+<ul id="stats" style="display: none;">
+	<li><span>FPS</span><span id="fps">-</span></li>
+	<li><span>Mouse Move/s</span><span id="mps">-</span></li>
+	<li><span>Demo Status</span><span id="status">-</span></li>
+</ul>
 </body>
 </html>
