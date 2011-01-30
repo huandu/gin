@@ -8,7 +8,7 @@ replace /_error\(/ //_error(
 }}#*/
 
 (function(window, undefined){
-const GIN_FPS_DEFAULT = 25;
+const GIN_FPS_DEFAULT = 30;
 const GIN_FPS_MIN = 1;
 const GIN_FPS_MAX = 100;
 
@@ -73,6 +73,7 @@ var Gin = (function(){
 				framePrepared: false,
 				frameRenderedPerSecond: 0,
 				frameRenderingTimeInSecond: 0,
+				frameCountInSecond: 0,
 				e: {
 					keyStates: [],
 					buttonStates: [],
@@ -232,14 +233,13 @@ var Gin = (function(){
 				var fps = self._.fps;
 				var e = self._.e;
 				var stats = self._.e.stats;
-				var frameCount = stats.frameCount;
 				var layer = self.layer();
 				var history = self._.mousemoveHistory;
 				
-				_updateEventStats(e, now);
+				_updateEventStats.call(self._, e, now);
 				
 				// frame rendered in 1s must be always lower than fps in setting.
-				if (frameCount >= fps && self._.framePrepared) {
+				if (self._.frameCountInSecond >= fps && self._.framePrepared) {
 					return;
 				}
 				
@@ -254,16 +254,18 @@ var Gin = (function(){
 				}
 				
 				now = Date.now();
-				_updateEventStats(e, now);
+				_updateEventStats.call(self._, e, now);
 				
 				// start rendering if it's time to do it.
-				if (!frameCount || (now % 1000) - frameCount * self._.interval + GIN_INTERVAL_TOLERANCE >= 0) {
+				if (!self._.frameCountInSecond
+					|| (now % 1000) - self._.frameCountInSecond * self._.interval + GIN_INTERVAL_TOLERANCE >= 0) {
 					e.timeStamp = now;
 					history.traverseLast = history.last;
 					layer.render();
 					layer.updateStyle();
 					
 					stats.frameCount++;
+					self._.frameCountInSecond++;
 					e.lastTime = now;
 					self._.framePrepared = false;
 				}
@@ -673,7 +675,7 @@ GinLayer.prototype = {
 		var e = _cloneEvent.call(this);
 		e.context = this._.canvas.getContext('2d');
 		e.context.save();
-		this._.hooks.render.call(this, e);
+		callback.call(this, e);
 		e.context.restore();
 		
 		return this;
@@ -692,7 +694,7 @@ GinLayer.prototype = {
 			return this;
 		}
 		
-		this._.hooks.render.call(this, _cloneEvent.call(this));
+		this._.hooks.beforerender.call(this, _cloneEvent.call(this));
 		return this;
 	},
 	render: function(hook) {
@@ -827,14 +829,13 @@ var _error = function() {
 
 var _updateEventStats = function(e, now) {
 	var stats = e.stats;
-	var frameCount = stats.frameCount;
 	var currentSecond = Math.floor(now / 1000);
 	var lastSecond = Math.floor(e.lastTime / 1000);
 	
-	if (currentSecond != lastSecond && frameCount) {
-		stats.fps = frameCount;
+	if (currentSecond != lastSecond && this.frameCountInSecond) {
+		stats.fps = this.frameCountInSecond;
 		stats.mps = stats.mousemoveCount;
-		stats.frameCount = 0;
+		this.frameCountInSecond = 0;
 		stats.mousemoveCount = 0;
 	}
 };

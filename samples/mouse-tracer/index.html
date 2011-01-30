@@ -187,8 +187,7 @@ $(function() {
 		}
 	};
 
-	var gin = $G('device', {
-		fps: 30,
+	$G('device', {
 		autoResize: true,
 	}, {
 		start: function(){
@@ -204,7 +203,7 @@ $(function() {
 			
 			this.data('stats', $('#stats').show());
 		},
-		render: function(e) {
+		beforerender: function(e) {
 			var bubbles = this.data('bubbles');
 			var dots = this.data('dots');
 			
@@ -223,13 +222,13 @@ $(function() {
 			}
 			
 			e.clearHistory();
-			
+			_updateStats(this.data('stats'), e.stats, e.hasFocus);
+		},
+		render: function(e) {
 			var ctx = e.context;
 			ctx.clearRect(0, 0, this.width(), this.height());
-			bubbles.render(e.context);
-			dots.render(e.context);
-			
-			_updateStats(this.data('stats'), e.stats, e.hasFocus);
+			this.data('bubbles').render(ctx);
+			this.data('dots').render(ctx);
 		},
 	});
 });
