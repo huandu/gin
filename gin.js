@@ -500,6 +500,9 @@ GinLayer.prototype = {
 				element.style.top = value + 'px';
 				return value;
 			}),
+			autoPlay: _getSetting(s.autoPlay, true, function(value) {
+				return value === false? value: undefined;
+			}),
 			hooks: {
 				beforerender: _parseHook(h, 'beforerender'),
 				render: _parseHook(h, 'render'),
@@ -588,11 +591,11 @@ GinLayer.prototype = {
 	parent: function() {
 		return this._.parent;
 	},
-	top: function() {
-		return this.core().layer();
-	},
 	core: function() {
 		return this._.core;
+	},
+	element: function() {
+		return this._.element;
 	},
 	style: function(property, value) {
 		var styles = this._.styles;
@@ -603,7 +606,9 @@ GinLayer.prototype = {
 		case 'height':
 		case 'top':
 		case 'left':
-			styles[property] = value + 'px';
+			if (this._[property] != value) {
+				styles[property] = value + 'px';
+			}
 		}
 
 		return this;
@@ -614,8 +619,8 @@ GinLayer.prototype = {
 		}
 		
 		if (GIN_REGEXP_INT.test(val) && val > 0) {
-			this._.left = parseInt(val, 10);
-			this.style('left', this._.left);
+			this.style('left', val);
+			this._.left = val;
 		}
 		
 		return this;
@@ -626,8 +631,8 @@ GinLayer.prototype = {
 		}
 		
 		if (GIN_REGEXP_INT.test(val) && val > 0) {
-			this._.top = parseInt(val, 10);
-			this.style('top', this._.top);
+			this.style('top', val);
+			this._.top = val;
 		}
 		
 		return this;
@@ -643,8 +648,8 @@ GinLayer.prototype = {
 		}
 		
 		if (GIN_REGEXP_INT.test(val) && val > 0) {
-			this._.width = parseInt(val, 10);
-			this.style('width', this._.width);
+			this.style('width', val);
+			this._.width = val;
 		}
 		
 		return this;
@@ -660,8 +665,8 @@ GinLayer.prototype = {
 		}
 		
 		if (GIN_REGEXP_INT.test(val) && val > 0) {
-			this._.height = parseInt(val, 10);
-			this.style('height', this._.height);
+			this.style('height', val);
+			this._.height = val;
 		}
 		
 		return this;
@@ -686,15 +691,18 @@ GinLayer.prototype = {
 			return this;
 		}
 		
+		if (!this._.autoPlay) {
+			return this;
+		}
+		
 		for (var i in this._.layers) {
 			this._.layers[i].beforerender();
 		}
 		
-		if (this._.hooks.beforerender == GIN_FUNC_DUMMY) {
-			return this;
+		if (this._.hooks.beforerender != GIN_FUNC_DUMMY) {
+			this._.hooks.beforerender.call(this, _cloneEvent.call(this));
 		}
 		
-		this._.hooks.beforerender.call(this, _cloneEvent.call(this));
 		return this;
 	},
 	render: function(hook) {
@@ -703,12 +711,16 @@ GinLayer.prototype = {
 			return this;
 		}
 		
-		if (this._.hooks.render != GIN_FUNC_DUMMY) {
-			this.draw(this._.hooks.render);
+		if (!this._.autoPlay) {
+			return this;
 		}
 		
 		for (var i in this._.layers) {
 			this._.layers[i].render();
+		}
+		
+		if (this._.hooks.render != GIN_FUNC_DUMMY) {
+			this.draw(this._.hooks.render);
 		}
 		
 		return this;
@@ -730,13 +742,13 @@ GinLayer.prototype = {
 			this._.layers[i].updateStyle();
 		}
 		
-		if (_emptyObject(this._.styles)) {
-			return this;
-		}
-		
 		var styles = this._.styles;
 		var element = this._.element;
 		var canvas = this._.canvas;
+		
+		if (_emptyObject(styles)) {
+			return this;
+		}
 		
 		for (var i in styles) {
 			this._.element.style[i] = styles[i];
@@ -744,14 +756,11 @@ GinLayer.prototype = {
 		
 		for (var i in styles) {
 			switch (i) {
-			case 'top':
-			case 'left':
-				break;
 			case 'width':
 			case 'height':
-				canvas[i] = parseInt(styles[i], 10);
-			default:
 				canvas.style[i] = styles[i];
+				canvas[i] = parseInt(styles[i], 10);
+				break;
 			}
 		}
 		
@@ -786,6 +795,14 @@ GinLayer.prototype = {
 		if (parent) {
 			parent.remove(this.name());
 		}
+	},
+	play: function() {
+		this._.autoPlay = true;
+		return this;
+	},
+	stop: function() {
+		this._.autoPlay = false;
+		return this;
 	}
 };
 
@@ -891,7 +908,7 @@ var _mousemoveHandler = function(e) {
 	var history = this._.core._.mousemoveHistory;
 	var last = history[history.last];
 	
-	if (!last || last.clientX != e.clientX || last.clientY != e.clientY) {
+	if (!last || last.clientX != e.clientX || last.clientY != e.clientY || history.last == history.current) {
 		evt.clientX = e.clientX;
 		evt.clientY = e.clientY;
 		evt.mouseover = true;
