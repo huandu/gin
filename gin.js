@@ -23,7 +23,7 @@ const GIN_RESIZE_INTERVAL = 100;
 
 const GIN_REGEXP_NAME = /^[a-zA-Z_\-][a-zA-Z_0-9\-]*$/;
 const GIN_REGEXP_BLANK = /\s+/;
-const GIN_REGEXP_INT = /^\d+$/;
+const GIN_REGEXP_NUMBER = /^-?\d+(\.\d*)?$/;
 const GIN_REGEXP_ANY = /.*/;
 
 const GIN_EVENT_MOUSEMOVE_MAX_HISTORY = 300;
@@ -38,19 +38,19 @@ const GIN_VK_CAPSLOCK = 20;
 var document = window.document;
 
 var Gin = (function(){
-	var Gin = function(id, settings, hooks) {
-		return new Gin.prototype.init(id, settings, hooks);
+	var Gin = function(id, settings, listeners) {
+		return new Gin.prototype.init(id, settings, listeners);
 	};
 	
 	Gin.prototype = {
-		init: function(id, settings, hooks) {
+		init: function(id, settings, listeners) {
 			if (!id) {
 				_error('id cannot be empty');
 				return;
 			}
 			
 			var s = settings || {};
-			var h = hooks || {};
+			var h = listeners || {};
 			var element;
 			
 			if (id.nodeType) {
@@ -99,7 +99,7 @@ var Gin = (function(){
 					traverseLast: 0,
 					length: 0
 				},
-				fps: _getSetting(s.fps, GIN_FPS_DEFAULT, GIN_REGEXP_INT, function(value) {
+				fps: _getSetting(s.fps, GIN_FPS_DEFAULT, GIN_REGEXP_NUMBER, function(value) {
 					if (value < GIN_FPS_MIN || value > GIN_FPS_MAX) {
 						_error('fps setting must in range of [' + GIN_FPS_MIN + ', ' + GIN_FPS_MAX + ']. '
 							+ '[fps: ' + value + ']');
@@ -108,7 +108,7 @@ var Gin = (function(){
 					
 					return value;
 				}),
-				width: _getSetting(s.width, element.clientWidth, GIN_REGEXP_INT, function(value) {
+				width: _getSetting(s.width, element.clientWidth, GIN_REGEXP_NUMBER, function(value) {
 					if (value <= 0) {
 						return;
 					}
@@ -117,7 +117,7 @@ var Gin = (function(){
 					element.width = value;
 					return value;
 				}),
-				height: _getSetting(s.height, element.clientHeight, GIN_REGEXP_INT, function(value) {
+				height: _getSetting(s.height, element.clientHeight, GIN_REGEXP_NUMBER, function(value) {
 					if (value <= 0) {
 						return;
 					}
@@ -129,13 +129,13 @@ var Gin = (function(){
 				autoPause: _getSetting(s.autoPause, false, function(value) {
 					return value === true? value: undefined;
 				}),
-				hooks: {
-					start: _parseHook(h, 'start'),
-					pause: _parseHook(h, 'pause'),
-					stop: _parseHook(h, 'stop'),
-					restart: _parseHook(h, 'restart'),
-					blur: _parseHook(h, 'blur'),
-					focus: _parseHook(h, 'focus')
+				listeners: {
+					start: _parseListener(h, 'start'),
+					pause: _parseListener(h, 'pause'),
+					stop: _parseListener(h, 'stop'),
+					restart: _parseListener(h, 'restart'),
+					blur: _parseListener(h, 'blur'),
+					focus: _parseListener(h, 'focus')
 				}
 			};
 			
@@ -152,8 +152,9 @@ var Gin = (function(){
 				parent: null,
 				parentElement: element
 			}, {
-				beforerender: h.beforerender,
-				render: h.render,
+				beforerender: _parseListener(h, 'beforerender'),
+				render: _parseListener(h, 'render'),
+				size: _parseListener(h, 'size'),
 				destroy: function() {
 					this.core().stop();
 				}
@@ -206,9 +207,9 @@ var Gin = (function(){
 		layer: function() {
 			return this._.layer;
 		},
-		start: function(hook) {
-			if (hook instanceof Function) {
-				this._.hooks.start = hook;
+		start: function(listener) {
+			if (listener instanceof Function) {
+				this._.listeners.start = listener;
 				return this;
 			}
 			
@@ -223,7 +224,7 @@ var Gin = (function(){
 				return this;
 			}
 			
-			this._.hooks.start.call(this.layer());
+			this._.listeners.start.call(this.layer());
 			var layer = this.layer();
 			this._.frameRenderingTimeInSecond = Date.now() % 1000;
 			var self = this;
@@ -262,7 +263,7 @@ var Gin = (function(){
 					e.timeStamp = now;
 					history.traverseLast = history.last;
 					layer.render();
-					
+
 					if (now - self._.lastResize > GIN_RESIZE_INTERVAL) {
 						self.resize();
 						self._.lastResize = now;
@@ -281,9 +282,9 @@ var Gin = (function(){
 			
 			return this;
 		},
-		pause: function(hook) {
-			if (hook instanceof Function) {
-				this._.hooks.pause = hook;
+		pause: function(listener) {
+			if (listener instanceof Function) {
+				this._.listeners.pause = listener;
 				return this;
 			}
 			
@@ -301,15 +302,15 @@ var Gin = (function(){
 				this._.timer = 0;
 			}
 			
-			this._.hooks.pause.call(this.layer());
+			this._.listeners.pause.call(this.layer());
 			this._.state = GIN_STATE_PAUSED;
 			_debug('gin is paused');
 			
 			return this;
 		},
-		stop: function(hook) {
-			if (hook instanceof Function) {
-				this._.hooks.stop = hook;
+		stop: function(listener) {
+			if (listener instanceof Function) {
+				this._.listeners.stop = listener;
 				return this;
 			}
 			
@@ -328,15 +329,15 @@ var Gin = (function(){
 				this._.timer = 0;
 			}
 			
-			this._.hooks.stop.call(this.layer());
+			this._.listeners.stop.call(this.layer());
 			this._.state = GIN_STATE_STOPPED;
 			_debug('gin is stopped');
 			
 			return this;
 		},
-		restart: function(hook) {
-			if (hook instanceof Function) {
-				this._.hooks.restart = hook;
+		restart: function(listener) {
+			if (listener instanceof Function) {
+				this._.listeners.restart = listener;
 				return this;
 			}
 			
@@ -346,14 +347,14 @@ var Gin = (function(){
 				return this;
 			}
 			
-			this._.hooks.restart.call(this.layer());
+			this._.listeners.restart.call(this.layer());
 			this.stop();
 			this.start();
 			return this;
 		},
-		blur: function(hook) {
-			if (hook instanceof Function) {
-				this._.hooks.blur = hook;
+		blur: function(listener) {
+			if (listener instanceof Function) {
+				this._.listeners.blur = listener;
 				return this;
 			}
 			
@@ -363,9 +364,9 @@ var Gin = (function(){
 				this.pause();
 			}
 		},
-		focus: function(hook) {
-			if (hook instanceof Function) {
-				this._.hooks.focus = hook;
+		focus: function(listener) {
+			if (listener instanceof Function) {
+				this._.listeners.focus = listener;
 				return this;
 			}
 			
@@ -387,8 +388,10 @@ var Gin = (function(){
 			var element = this._.element;
 			var receiver = this._.receiver;
 			var layer = this.layer();
+			var needResize = false;
 			
 			if (w != this._.width) {
+				needResize = true;
 				this._.width = w;
 				receiver.style.width = w + 'px';
 				layer.width(w);
@@ -400,6 +403,7 @@ var Gin = (function(){
 			}
 			
 			if (h != this._.height) {
+				needResize = true;
 				this._.height = h;
 				receiver.style.height = h + 'px';
 				layer.height(h);
@@ -409,6 +413,16 @@ var Gin = (function(){
 					element.height = h;
 				}
 			}
+			
+			if (needResize) {
+				layer.size();
+			}
+		},
+		width: function() {
+			return this._.width;
+		},
+		height: function() {
+			return this._.height;
 		},
 		cloneEvent: function() {
 			var e = _deepClone(this._.e);
@@ -427,10 +441,10 @@ var Gin = (function(){
 
 function GinLayer() {}
 GinLayer.prototype = {
-	create: function(settings, hooks) {
+	create: function(settings, listeners) {
 		var layer = new GinLayer();
 		var s = settings || {};
-		var h = hooks || {};
+		var h = listeners || {};
 
 		if (s.parent !== null && !(s.parent instanceof GinLayer)) {
 			_error('parent must be GinLayer instance or null');
@@ -477,7 +491,7 @@ GinLayer.prototype = {
 				return value;
 			}),
 			style: {
-				width: _getSetting(s.width, 0, GIN_REGEXP_INT, function(value) {
+				width: _getSetting(s.width, 0, GIN_REGEXP_NUMBER, function(value) {
 					if (value <= 0) {
 						return;
 					}
@@ -485,7 +499,7 @@ GinLayer.prototype = {
 					element.style.width = value + 'px';
 					return value;
 				}),
-				height: _getSetting(s.height, 0, GIN_REGEXP_INT, function(value) {
+				height: _getSetting(s.height, 0, GIN_REGEXP_NUMBER, function(value) {
 					if (value <= 0) {
 						return;
 					}
@@ -493,7 +507,7 @@ GinLayer.prototype = {
 					element.style.height = value + 'px';
 					return value;
 				}),
-				left: _getSetting(s.left, 0, GIN_REGEXP_INT, function(value) {
+				left: _getSetting(s.left, 0, GIN_REGEXP_NUMBER, function(value) {
 					if (value <= 0) {
 						return;
 					}
@@ -501,7 +515,7 @@ GinLayer.prototype = {
 					element.style.left = value + 'px';
 					return value;
 				}),
-				top: _getSetting(s.top, 0, GIN_REGEXP_INT, function(value) {
+				top: _getSetting(s.top, 0, GIN_REGEXP_NUMBER, function(value) {
 					if (value <= 0) {
 						return;
 					}
@@ -510,12 +524,13 @@ GinLayer.prototype = {
 					return value;
 				})
 			},
-			hooks: {
-				beforerender: _parseHook(h, 'beforerender'),
-				render: _parseHook(h, 'render'),
-				destroy: _parseHook(h, 'destroy'),
-				play: _parseHook(h, 'play'),
-				stop: _parseHook(h, 'stop')
+			listeners: {
+				beforerender: _parseListener(h, 'beforerender'),
+				render: _parseListener(h, 'render'),
+				destroy: _parseListener(h, 'destroy'),
+				size: _parseListener(h, 'size'),
+				play: _parseListener(h, 'play'),
+				stop: _parseListener(h, 'stop')
 			}
 		};
 		
@@ -548,7 +563,7 @@ GinLayer.prototype = {
 		
 		return layer;
 	},
-	layers: function(name, settings, hooks) {
+	layers: function(name, settings, listeners) {
 		if (settings === undefined) {
 			if (typeof name !== 'string' && !(name instanceof Array)) {
 				_error('name must be string or array');
@@ -590,7 +605,7 @@ GinLayer.prototype = {
 		s.parentElement = this._.element;
 		s.core = this.core();
 		s.name = name;
-		var layer = this.create(s, hooks);
+		var layer = this.create(s, listeners);
 		
 		if (!layer) {
 			_error('cannot create new layer');
@@ -598,7 +613,7 @@ GinLayer.prototype = {
 		}
 		
 		this._.layers[name] = layer;
-		return layer;
+		return this;
 	},
 	name: function() {
 		return this._.name;
@@ -633,7 +648,7 @@ GinLayer.prototype = {
 			return this._.style.left;
 		}
 		
-		if (GIN_REGEXP_INT.test(val) && val > 0) {
+		if (GIN_REGEXP_NUMBER.test(val)) {
 			this.style('left', val);
 		}
 		
@@ -644,7 +659,7 @@ GinLayer.prototype = {
 			return this._.style.top;
 		}
 		
-		if (GIN_REGEXP_INT.test(val) && val > 0) {
+		if (GIN_REGEXP_NUMBER.test(val)) {
 			this.style('top', val);
 		}
 		
@@ -660,7 +675,7 @@ GinLayer.prototype = {
 			return this;
 		}
 		
-		if (GIN_REGEXP_INT.test(val) && val > 0) {
+		if (GIN_REGEXP_NUMBER.test(val) && val >= 0) {
 			this.style('width', val);
 		}
 		
@@ -676,7 +691,7 @@ GinLayer.prototype = {
 			return this;
 		}
 		
-		if (GIN_REGEXP_INT.test(val) && val > 0) {
+		if (GIN_REGEXP_NUMBER.test(val) && val >= 0) {
 			this.style('height', val);
 		}
 		
@@ -694,46 +709,6 @@ GinLayer.prototype = {
 		callback.call(this, e);
 		e.context.restore();
 		_GinLayer_fixOffset.call(this);
-		
-		return this;
-	},
-	beforerender: function(hook) {
-		if (hook instanceof Function) {
-			this._.hooks.beforerender = hook;
-			return this;
-		}
-		
-		if (!this._.playing) {
-			return this;
-		}
-		
-		for (var i in this._.layers) {
-			this._.layers[i].beforerender();
-		}
-		
-		if (this._.hooks.beforerender != GIN_FUNC_DUMMY) {
-			this._.hooks.beforerender.call(this, _GinLayer_cloneEvent.call(this));
-		}
-		
-		return this;
-	},
-	render: function(hook) {
-		if (hook instanceof Function) {
-			this._.hooks.render = hook;
-			return this;
-		}
-		
-		if (!this._.playing) {
-			return this;
-		}
-		
-		for (var i in this._.layers) {
-			this._.layers[i].render();
-		}
-		
-		if (this._.hooks.render != GIN_FUNC_DUMMY) {
-			this.draw(this._.hooks.render);
-		}
 		
 		return this;
 	},
@@ -764,7 +739,7 @@ GinLayer.prototype = {
 		
 		for (var i in style) {
 			this._.element.style[i] = style[i];
-			this._.style[i] = parseInt(style[i], 10);
+			this._.style[i] = Math.round(parseFloat(style[i]));
 		}
 		
 		for (var i in style) {
@@ -772,7 +747,7 @@ GinLayer.prototype = {
 			case 'width':
 			case 'height':
 				canvas.style[i] = style[i];
-				canvas[i] = parseInt(style[i], 10);
+				canvas[i] = Math.round(parseFloat(style[i]));
 				break;
 			}
 		}
@@ -793,41 +768,48 @@ GinLayer.prototype = {
 		this._.data[key] = value;
 		return this;
 	},
-	destroy: function(hook) {
-		if (hook instanceof Function) {
-			this._.hooks.destroy = hook;
-			return this;
-		}
-		
-		for (var i in this._.layers) {
-			this._.layers[i].destroy();
-		}
-		
-		var parent = this._.parent;
-		
-		if (parent) {
-			parent.remove(this.name());
-		}
+	beforerender: function(listener) {
+		return _GinLayer_addOrCallListener.call(this,
+			'beforerender', listener, this._.playing, this._.playing, function() {
+				return _GinLayer_cloneEvent.call(this);
+			});
 	},
-	play: function(hook) {
-		if (hook instanceof Function) {
-			this._.hooks.play = hook;
-			return this;
-		}
-		
-		this._.playing = true;
-		this._.hooks.play.call(this);
-		return this;
+	render: function(listener) {
+		return _GinLayer_addOrCallListener.call(this,
+			'render', listener, false, this._.playing, function() {
+				this.draw(this._.listeners.render);
+			});
 	},
-	stop: function(hook) {
-		if (hook instanceof Function) {
-			this._.hooks.stop = hook;
-			return this;
-		}
-		
-		this._.playing = false;
-		this._.hooks.stop.call(this);
-		return this;
+	destroy: function(listener) {
+		return _GinLayer_addOrCallListener.call(this,
+			'destroy', listener, true, true, function() {
+				var parent = this._.parent;
+				
+				if (parent) {
+					parent.remove(this.name());
+				}
+			});
+	},
+	play: function(listener) {
+		return _GinLayer_addOrCallListener.call(this,
+			'play', listener, true, false, function() {
+				this._.playing = true;
+			});
+	},
+	stop: function(listener) {
+		return _GinLayer_addOrCallListener.call(this,
+			'stop', listener, true, false, function() {
+				this._.playing = false;
+			});
+	},
+	size: function(listener) {
+		return _GinLayer_addOrCallListener.call(this,
+			'size', listener, true, true, function() {
+				return {
+					width: this.core().width(),
+					height: this.core().height()
+				};
+			});
 	},
 	show: function() {
 		this._.element.style.display = 'block';
@@ -863,13 +845,38 @@ var _GinLayer_fixOffset = function() {
 	var left = element.style.left || 0;
 	var top = element.style.top || 0;
 	
-	if (this.left() != parseInt(left, 10)) {
+	if (this.left() != Math.round(parseFloat(left, 10))) {
 		this.left(left);
 	}
 	
-	if (this.top() != parseInt(top, 10)) {
+	if (this.top() != Math.round(parseFloat(top, 10))) {
 		this.top(top);
 	}
+};
+
+var _GinLayer_addOrCallListener = function(name, listener, callMe, callChild, action) {
+	if (listener instanceof Function) {
+		this._.listeners[name] = listener;
+		return this;
+	}
+	
+	var e;
+	
+	if ((callChild || callMe) && action) {
+		e = action.call(this)
+	}
+	
+	if (callChild) {
+		for (var i in this._.layers) {
+			this._.layers[i][name].call(this._.layers[i], e);
+		}
+	}
+	
+	if (callMe && this._.listeners[name] != GIN_FUNC_DUMMY) {
+		this._.listeners[name].call(this, e);
+	}
+	
+	return this;
 };
 
 var _specialKeys = [];
@@ -931,9 +938,9 @@ var _getSetting = function(value, defValue, regexp, action) {
 	return val === undefined? defValue: val;
 };
 
-var _parseHook = function(hooks, item) {
-	if (hooks[item] instanceof Function) {
-		return hooks[item];
+var _parseListener = function(listeners, item) {
+	if (listeners[item] instanceof Function) {
+		return listeners[item];
 	}
 	
 	return GIN_FUNC_DUMMY;
