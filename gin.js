@@ -1010,6 +1010,7 @@ var _mousebuttonHandler = function(e) {
 	
 	if (isDown) {
 		e.preventDefault();
+		_mousemoveHandler.call(this, e);
 	}
 };
 
