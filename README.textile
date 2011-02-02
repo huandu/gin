@@ -1,5 +1,7 @@
 ﻿Welcome to send me feedback in github or "@huandu":http://twitter.com/huandu on twitter.
 
+If you want to play with <code>gin</code> now, see "gin-samples":https://github.com/huandu/gin-samples on github.
+
 h2. What's the gin
 
 The <code>gin</code> is a Game Interactive eNgine. It's designed for HTML5 games on modern browser.
@@ -20,14 +22,18 @@ I may add hit test and WebGL support in it, but it's not certain at this point.
 
 h3. Non-Goals
 
-It will never include any canvas scene graph api.
+It will never include
+* Canvas scene graph api
+* Physical engine
+
+It's highly recommended to use <code>gin</code> with other mature js frameworks to complete more tasks.
+
+For instance, developers can use "jQuery":http://jquery.com/ to animate layers. It also means, <code>gin</code> will not include any layer animation support.
+
+I don't want to reinvent any wheel. If I'm doing so, please let me know.
 
 h2. Browser Compatability
 
 The <code>gin</code> is tested on
 * Chrome 8/10
 * Firefox 3.6
-
-h2. Samples
-
-See "gin-samples":https://github.com/huandu/gin-samples

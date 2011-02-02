@@ -19,6 +19,8 @@ const GIN_STATE_STOPPED = 4;
 
 const GIN_INTERVAL_TOLERANCE = 5;
 
+const GIN_RESIZE_INTERVAL = 100;
+
 const GIN_REGEXP_NAME = /^[a-zA-Z_\-][a-zA-Z_0-9\-]*$/;
 const GIN_REGEXP_BLANK = /\s+/;
 const GIN_REGEXP_INT = /^\d+$/;
@@ -74,6 +76,7 @@ var Gin = (function(){
 				frameRenderedPerSecond: 0,
 				frameRenderingTimeInSecond: 0,
 				frameCountInSecond: 0,
+				lastResize: now,
 				e: {
 					keyStates: [],
 					buttonStates: [],
@@ -192,9 +195,6 @@ var Gin = (function(){
 			receiver.addEventListener('contextmenu', _contextmenuHandler, false);
 			receiver.addEventListener('mousemove', _mousemoveHandler, false);
 			
-			var self = this;
-			window.setInterval(function() {self.resize();}, 100);
-			
 			if (_getSetting(s.autoStart, true, function(value) {
 				return value === false? value: undefined;
 			})) {
@@ -262,6 +262,12 @@ var Gin = (function(){
 					e.timeStamp = now;
 					history.traverseLast = history.last;
 					layer.render();
+					
+					if (now - self._.lastResize > GIN_RESIZE_INTERVAL) {
+						self.resize();
+						self._.lastResize = now;
+					}
+					
 					layer.updateStyle();
 					
 					stats.frameCount++;
@@ -448,6 +454,7 @@ GinLayer.prototype = {
 		
 		var element = document.createElement('div');
 		element.style.position = 'absolute';
+		element.style.display = 'block';
 
 		layer._ = {
 			name: s.name,
@@ -456,10 +463,11 @@ GinLayer.prototype = {
 			element: element,
 			parentElement: s.parentElement,
 			layers: {},
-			styles: {},
-			data: {},
+			newStyle: {},
+			data: _getSetting(s.data, {}),
 			offsetX: 0,
 			offsetY: 0,
+			hidden: false,
 			attachment: _getSetting(s.attachment, null, function(value) {
 				if (!value || !value.nodeType) {
 					_error('attachment must be a DOM element');
@@ -468,45 +476,46 @@ GinLayer.prototype = {
 				
 				return value;
 			}),
-			width: _getSetting(s.width, 0, GIN_REGEXP_INT, function(value) {
-				if (value <= 0) {
-					return;
-				}
-				
-				element.style.width = value + 'px';
-				return value;
-			}),
-			height: _getSetting(s.height, 0, GIN_REGEXP_INT, function(value) {
-				if (value <= 0) {
-					return;
-				}
-				
-				element.style.height = value + 'px';
-				return value;
-			}),
-			left: _getSetting(s.left, 0, GIN_REGEXP_INT, function(value) {
-				if (value <= 0) {
-					return;
-				}
-				
-				element.style.left = value + 'px';
-				return value;
-			}),
-			top: _getSetting(s.top, 0, GIN_REGEXP_INT, function(value) {
-				if (value <= 0) {
-					return;
-				}
-				
-				element.style.top = value + 'px';
-				return value;
-			}),
-			autoPlay: _getSetting(s.autoPlay, true, function(value) {
-				return value === false? value: undefined;
-			}),
+			style: {
+				width: _getSetting(s.width, 0, GIN_REGEXP_INT, function(value) {
+					if (value <= 0) {
+						return;
+					}
+					
+					element.style.width = value + 'px';
+					return value;
+				}),
+				height: _getSetting(s.height, 0, GIN_REGEXP_INT, function(value) {
+					if (value <= 0) {
+						return;
+					}
+					
+					element.style.height = value + 'px';
+					return value;
+				}),
+				left: _getSetting(s.left, 0, GIN_REGEXP_INT, function(value) {
+					if (value <= 0) {
+						return;
+					}
+					
+					element.style.left = value + 'px';
+					return value;
+				}),
+				top: _getSetting(s.top, 0, GIN_REGEXP_INT, function(value) {
+					if (value <= 0) {
+						return;
+					}
+					
+					element.style.top = value + 'px';
+					return value;
+				})
+			},
 			hooks: {
 				beforerender: _parseHook(h, 'beforerender'),
 				render: _parseHook(h, 'render'),
-				destroy: _parseHook(h, 'destroy')
+				destroy: _parseHook(h, 'destroy'),
+				play: _parseHook(h, 'play'),
+				stop: _parseHook(h, 'stop')
 			}
 		};
 		
@@ -523,13 +532,19 @@ GinLayer.prototype = {
 		canvas.style.position = 'absolute';
 		canvas.style.left = 0;
 		canvas.style.top = 0;
-		canvas.style.width = layer._.width + 'px';
-		canvas.style.height = layer._.height + 'px';
-		canvas.width = layer._.width;
-		canvas.height = layer._.height;
+		canvas.style.width = layer._.style.width + 'px';
+		canvas.style.height = layer._.style.height + 'px';
+		canvas.width = layer._.style.width;
+		canvas.height = layer._.style.height;
 		element.appendChild(canvas);
 		layer._.canvas = canvas;
 		layer._.parentElement.appendChild(element);
+		
+		if (_getSetting(s.autoPlay, true, function(value) {
+				return value === false? value: undefined;
+			})) {
+			layer.play();
+		}
 		
 		return layer;
 	},
@@ -598,7 +613,7 @@ GinLayer.prototype = {
 		return this._.element;
 	},
 	style: function(property, value) {
-		var styles = this._.styles;
+		var style = this._.newStyle;
 		
 		// white list mode. only support following styles.
 		switch (property) {
@@ -606,8 +621,8 @@ GinLayer.prototype = {
 		case 'height':
 		case 'top':
 		case 'left':
-			if (this._[property] != value) {
-				styles[property] = value + 'px';
+			if (this._.style[property] != value) {
+				style[property] = value + 'px';
 			}
 		}
 
@@ -615,31 +630,29 @@ GinLayer.prototype = {
 	},
 	left: function(val) {
 		if (val === undefined) {
-			return this._.left;
+			return this._.style.left;
 		}
 		
 		if (GIN_REGEXP_INT.test(val) && val > 0) {
 			this.style('left', val);
-			this._.left = val;
 		}
 		
 		return this;
 	},
 	top: function(val) {
 		if (val === undefined) {
-			return this._.top;
+			return this._.style.top;
 		}
 		
 		if (GIN_REGEXP_INT.test(val) && val > 0) {
 			this.style('top', val);
-			this._.top = val;
 		}
 		
 		return this;
 	},
 	width: function(val) {
 		if (val === undefined) {
-			return this._.width;
+			return this._.style.width;
 		}
 		
 		if (!this._.parent && !_verifyFriendMethod(arguments)) {
@@ -649,14 +662,13 @@ GinLayer.prototype = {
 		
 		if (GIN_REGEXP_INT.test(val) && val > 0) {
 			this.style('width', val);
-			this._.width = val;
 		}
 		
 		return this;
 	},
 	height: function(val) {
 		if (val === undefined) {
-			return this._.height;
+			return this._.style.height;
 		}
 		
 		if (!this._.parent && !_verifyFriendMethod(arguments)) {
@@ -666,7 +678,6 @@ GinLayer.prototype = {
 		
 		if (GIN_REGEXP_INT.test(val) && val > 0) {
 			this.style('height', val);
-			this._.height = val;
 		}
 		
 		return this;
@@ -677,11 +688,12 @@ GinLayer.prototype = {
 			return this;
 		}
 		
-		var e = _cloneEvent.call(this);
+		var e = _GinLayer_cloneEvent.call(this);
 		e.context = this._.canvas.getContext('2d');
 		e.context.save();
 		callback.call(this, e);
 		e.context.restore();
+		_GinLayer_fixOffset.call(this);
 		
 		return this;
 	},
@@ -691,7 +703,7 @@ GinLayer.prototype = {
 			return this;
 		}
 		
-		if (!this._.autoPlay) {
+		if (!this._.playing) {
 			return this;
 		}
 		
@@ -700,7 +712,7 @@ GinLayer.prototype = {
 		}
 		
 		if (this._.hooks.beforerender != GIN_FUNC_DUMMY) {
-			this._.hooks.beforerender.call(this, _cloneEvent.call(this));
+			this._.hooks.beforerender.call(this, _GinLayer_cloneEvent.call(this));
 		}
 		
 		return this;
@@ -711,7 +723,7 @@ GinLayer.prototype = {
 			return this;
 		}
 		
-		if (!this._.autoPlay) {
+		if (!this._.playing) {
 			return this;
 		}
 		
@@ -742,29 +754,30 @@ GinLayer.prototype = {
 			this._.layers[i].updateStyle();
 		}
 		
-		var styles = this._.styles;
+		var style = this._.newStyle;
 		var element = this._.element;
 		var canvas = this._.canvas;
 		
-		if (_emptyObject(styles)) {
+		if (_emptyObject(style)) {
 			return this;
 		}
 		
-		for (var i in styles) {
-			this._.element.style[i] = styles[i];
+		for (var i in style) {
+			this._.element.style[i] = style[i];
+			this._.style[i] = parseInt(style[i], 10);
 		}
 		
-		for (var i in styles) {
+		for (var i in style) {
 			switch (i) {
 			case 'width':
 			case 'height':
-				canvas.style[i] = styles[i];
-				canvas[i] = parseInt(styles[i], 10);
+				canvas.style[i] = style[i];
+				canvas[i] = parseInt(style[i], 10);
 				break;
 			}
 		}
 		
-		this._.styles = {};
+		this._.newStyle = {};
 		return this;
 	},
 	data: function(key, value) {
@@ -796,20 +809,67 @@ GinLayer.prototype = {
 			parent.remove(this.name());
 		}
 	},
-	play: function() {
-		this._.autoPlay = true;
+	play: function(hook) {
+		if (hook instanceof Function) {
+			this._.hooks.play = hook;
+			return this;
+		}
+		
+		this._.playing = true;
+		this._.hooks.play.call(this);
 		return this;
 	},
-	stop: function() {
-		this._.autoPlay = false;
+	stop: function(hook) {
+		if (hook instanceof Function) {
+			this._.hooks.stop = hook;
+			return this;
+		}
+		
+		this._.playing = false;
+		this._.hooks.stop.call(this);
+		return this;
+	},
+	show: function() {
+		this._.element.style.display = 'block';
+		this._.hidden = false;
+		return this;
+	},
+	hide: function() {
+		this._.element.style.display = 'none';
+		this._.hidden = true;
 		return this;
 	}
 };
 
-function GinEvent() {}
-GinEvent.prototype = {
-	create: function(e) {
-	},
+var _GinLayer_cloneEvent = function() {
+	var e = this.core().cloneEvent();
+	e.layerName = this._.name;
+	
+	if (this._.parent) {
+		this._.offsetX = this._.parent._.offsetX + this._.parent.left();
+		this._.offsetY = this._.parent._.offsetY + this._.parent.top();
+	}
+	
+	e.offsetX = this._.offsetX + this.left();
+	e.offsetY = this._.offsetY + this.top();
+	e.clientX -= e.offsetX;
+	e.clientY -= e.offsetY;
+	
+	return e;
+};
+
+var _GinLayer_fixOffset = function() {
+	var element = this.element();
+	var left = element.style.left || 0;
+	var top = element.style.top || 0;
+	
+	if (this.left() != parseInt(left, 10)) {
+		this.left(left);
+	}
+	
+	if (this.top() != parseInt(top, 10)) {
+		this.top(top);
+	}
 };
 
 var _specialKeys = [];
@@ -860,7 +920,8 @@ var _updateEventStats = function(e, now) {
 var _getSetting = function(value, defValue, regexp, action) {
 	var r = regexp instanceof RegExp? regexp: null;
 	var a = action instanceof Function? action:
-		regexp instanceof Function? regexp: GIN_FUNC_DUMMY;
+		regexp instanceof Function? regexp:
+		function(value) {return value;};
 	var val;
 	
 	if (value !== undefined && (!r || r.test(value))) {
@@ -979,24 +1040,6 @@ var _focusHandler = function(e) {
 	}
 	
 	this._.core.focus();
-};
-
-var _cloneEvent = function() {
-	var e = this.core().cloneEvent();
-	e.layerName = this._.name;
-	
-	if (this._.parent) {
-		this._.offsetX = this._.parent.offsetX + this._.parent.left;
-		this._.offsetY = this._.parent.offsetY + this._.parent.top;
-	}
-	
-	e.offsetX = this._.offsetX + this._.left;
-	e.offsetY = this._.offsetY + this._.top;
-	e.clientX -= e.offsetX;
-	e.clientY -= e.offsetY;
-	e.layer = this;
-	
-	return e;
 };
 
 // traverse all mouse move events since last rendering.
