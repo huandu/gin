@@ -562,6 +562,10 @@ GinLayer.prototype = {
 			element.appendChild(layer._.attachment);
 		}
 		
+		if (layer._.hidden) {
+			layer.hide();
+		}
+		
 		if (_getSetting(s.autoPlay, true, function(value) {
 				return value === false? value: undefined;
 			})) {
