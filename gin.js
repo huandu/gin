@@ -485,7 +485,9 @@ GinLayer.prototype = {
 			data: _getSetting(s.data, {}),
 			offsetX: 0,
 			offsetY: 0,
-			hidden: false,
+			hidden: _getSetting(s.hidden, false, function(value) {
+				return value === true? value: undefined;
+			}),
 			detached: s.parent? false: true,
 			attachment: _getSetting(s.attachment, null, function(value) {
 				if (!value || !value.nodeType) {
