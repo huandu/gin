@@ -873,6 +873,7 @@ var _GinLayer_cloneEvent = function() {
 	e.offsetY = this._.offsetY + this.top();
 	e.clientX -= e.offsetX;
 	e.clientY -= e.offsetY;
+	e.layer = this;
 	
 	return e;
 };
