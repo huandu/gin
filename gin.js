@@ -491,6 +491,7 @@ GinLayer.prototype = {
 			layers: {},
 			newStyle: {},
 			data: _getSetting(s.data, {}),
+			dataHooks: {},
 			offsetX: 0,
 			offsetY: 0,
 			detached: s.parent? false: true,
@@ -620,6 +621,11 @@ GinLayer.prototype = {
 		}
 		
 		var s = settings || {};
+		
+		if (this._.layers[name]) {
+			_debug('layer already exists. [name: ' + name + ']');
+			return this;
+		}
 		
 		if (!GIN_REGEXP_NAME.test(name)) {
 			_error('invalid layer name. [name: ' + name + ']');
@@ -812,7 +818,7 @@ GinLayer.prototype = {
 		this._.newStyle = {};
 		return this;
 	},
-	data: function(key, value) {
+	data: function(key, value, hook) {
 		if (key === undefined) {
 			_error('data key cannot be undefined');
 			return;
@@ -823,6 +829,15 @@ GinLayer.prototype = {
 		}
 		
 		this._.data[key] = value;
+		
+		if (hook instanceof Function) {
+			this._.dataHooks[key] = hook;
+		}
+		
+		if (this._.dataHooks[key]) {
+			hook.call(this, value);
+		}
+		
 		return this;
 	},
 	beforerender: function(listener) {
@@ -849,13 +864,13 @@ GinLayer.prototype = {
 	},
 	play: function(listener) {
 		return _GinLayer_addOrCallListener.call(this,
-			'play', listener, true, false, function() {
+			'play', listener, !this._.playing, false, function() {
 				this._.playing = true;
 			});
 	},
 	stop: function(listener) {
 		return _GinLayer_addOrCallListener.call(this,
-			'stop', listener, true, false, function() {
+			'stop', listener, this._.playing, false, function() {
 				this._.playing = false;
 			});
 	},
