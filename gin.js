@@ -835,7 +835,7 @@ GinLayer.prototype = {
 		}
 		
 		if (this._.dataHooks[key]) {
-			hook.call(this, value);
+			this._.dataHooks[key].call(this, value);
 		}
 		
 		return this;
