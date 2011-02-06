@@ -39,6 +39,9 @@ const GIN_VK_CTRL = 17;
 const GIN_VK_ALT = 18;
 const GIN_VK_CAPSLOCK = 20;
 
+const GIN_ZINDEX_EVENT_LAYER = 10000;
+const GIN_ZINDEX_DIALOG_LAYER = GIN_ZINDEX_EVENT_LAYER + 1;
+
 var document = window.document;
 
 var Gin = (function(){
@@ -183,7 +186,7 @@ var Gin = (function(){
 			receiver.style.top = 0;
 			receiver.style.width = this._.width + 'px';
 			receiver.style.height = this._.height + 'px';
-			receiver.style.zIndex = 10000;
+			receiver.style.zIndex = GIN_ZINDEX_EVENT_LAYER;
 			receiver.style.outline = 0;
 			receiver.tabIndex = 1;
 			element.appendChild(receiver);
@@ -485,10 +488,10 @@ GinLayer.prototype = {
 			data: _getSetting(s.data, {}),
 			offsetX: 0,
 			offsetY: 0,
-			hidden: _getSetting(s.hidden, false, function(value) {
+			detached: s.parent? false: true,
+			dialogMode: _getSetting(s.dialogMode, false, function(value) {
 				return value === true? value: undefined;
 			}),
-			detached: s.parent? false: true,
 			attachment: _getSetting(s.attachment, null, function(value) {
 				if (!value || !value.nodeType) {
 					_error('attachment must be a DOM element');
@@ -562,7 +565,9 @@ GinLayer.prototype = {
 			element.appendChild(layer._.attachment);
 		}
 		
-		if (layer._.hidden) {
+		if (_getSetting(s.hidden, false, function(value) {
+				return value === true? value: undefined;
+			})) {
 			layer.hide();
 		}
 		
@@ -570,6 +575,10 @@ GinLayer.prototype = {
 				return value === false? value: undefined;
 			})) {
 			layer.play();
+		}
+		
+		if (layer._.dialogMode) {
+			layer.dialog(true);
 		}
 		
 		return layer;
@@ -856,12 +865,21 @@ GinLayer.prototype = {
 	},
 	show: function() {
 		this._.element.style.display = 'block';
-		this._.hidden = false;
 		return this;
 	},
 	hide: function() {
 		this._.element.style.display = 'none';
-		this._.hidden = true;
+		return this;
+	},
+	dialog: function(mode) {
+		if (mode && !this._.dialogMode) {
+			this._.dialogMode = true;
+			this._.element.style.zIndex = GIN_ZINDEX_DIALOG_LAYER;
+		} else if (!mode && this._.dialogMode) {
+			this._.dialogMode = false;
+			this._.element.style.zIndex = '';
+		}
+		
 		return this;
 	}
 };
