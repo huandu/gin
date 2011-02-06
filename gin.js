@@ -370,11 +370,13 @@ var Gin = (function(){
 				return this;
 			}
 			
-			this._.e.hasFocus = false;
-			this._.e.keyStats = [];
-			
-			if (this._.autoPause) {
-				this.pause();
+			if (this._.e.hasFocus) {
+				this._.e.hasFocus = false;
+				this._.e.keyStats = [];
+				
+				if (this._.autoPause) {
+					this.pause();
+				}
 			}
 		},
 		focus: function(listener) {
@@ -383,10 +385,12 @@ var Gin = (function(){
 				return this;
 			}
 			
-			this._.e.hasFocus = true;
-			
-			if (this._.autoPause) {
-				this.start();
+			if (!this._.e.hasFocus) {
+				this._.e.hasFocus = true;
+				
+				if (this._.autoPause) {
+					this.start();
+				}
 			}
 		},
 		resize: function(width, height) {
@@ -1038,6 +1042,7 @@ _keyboardHandler = function(e) {
 	var evt = this._.core._.e,
 		isDown = e.type === 'keydown'? true: false;
 	e.stopPropagation();
+	e.preventDefault();
 	
 	if (!_specialKeys[e.keyCode]) {
 		evt.keyStates[e.keyCode] = isDown;
