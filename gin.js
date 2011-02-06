@@ -575,20 +575,20 @@ GinLayer.prototype = {
 		}
 		
 		if (_getSetting(s.hidden, false, function(value) {
-				return value === true? value: undefined;
-			})) {
+			return value === true? value: undefined;
+		})) {
 			layer.hide();
 		}
 		
 		if (_getSetting(s.autoPlay, true, function(value) {
-				return value === false? value: undefined;
-			})) {
+			return value === false? value: undefined;
+		})) {
 			layer.play();
 		}
 		
 		if (_getSetting(s.dialogMode, false, function(value) {
-				return value === true? value: undefined;
-			})) {
+			return value === true? value: undefined;
+		})) {
 			layer.dialog(true);
 		}
 		
