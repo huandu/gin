@@ -1,5 +1,10 @@
 /*!
- TODO: put licence info here
+ * gin JavaScript Library v1.0.0
+ * https://github.com/huandu/gin/
+ *
+ * Copyright 2011, Huan Du
+ * Licensed under the MIT license
+ * http://www.opensource.org/licenses/mit-license
  */
 
 /*#{{
