@@ -4,7 +4,7 @@
  *
  * Copyright 2011, Huan Du
  * Licensed under the MIT license
- * http://www.opensource.org/licenses/mit-license
+ * https://github.com/huandu/gin/blob/master/LICENSE
  */
 
 /*#{{
