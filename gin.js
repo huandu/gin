@@ -494,9 +494,7 @@ GinLayer.prototype = {
 			offsetX: 0,
 			offsetY: 0,
 			detached: s.parent? false: true,
-			dialogMode: _getSetting(s.dialogMode, false, function(value) {
-				return value === true? value: undefined;
-			}),
+			dialogMode: false,
 			attachment: _getSetting(s.attachment, null, function(value) {
 				if (!value || !value.nodeType) {
 					_error('attachment must be a DOM element');
@@ -582,7 +580,9 @@ GinLayer.prototype = {
 			layer.play();
 		}
 		
-		if (layer._.dialogMode) {
+		if (_getSetting(s.dialogMode, false, function(value) {
+				return value === true? value: undefined;
+			})) {
 			layer.dialog(true);
 		}
 		
