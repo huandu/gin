@@ -371,6 +371,7 @@ var Gin = (function(){
 			}
 			
 			this._.e.hasFocus = false;
+			this._.e.keyStats = [];
 			
 			if (this._.autoPause) {
 				this.pause();
