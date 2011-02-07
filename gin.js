@@ -833,16 +833,15 @@ GinLayer.prototype = {
 			return this._.data[key];
 		}
 		
-		this._.data[key] = value;
-		
 		if (hook instanceof Function) {
 			this._.dataHooks[key] = hook;
 		}
 		
 		if (this._.dataHooks[key]) {
-			this._.dataHooks[key].call(this, value);
+			this._.dataHooks[key].call(this, value, this._.data[key]);
 		}
 		
+		this._.data[key] = value;
 		return this;
 	},
 	beforerender: function(listener) {
