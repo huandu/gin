@@ -1102,6 +1102,10 @@ _mousebuttonHandler = function(e) {
 	e.preventDefault();
 	e.mouseState = isDown? GIN_MOUSESTATE_DOWN: GIN_MOUSESTATE_UP;
 	_mousemoveHandler.call(this, e);
+	
+	if (isDown && !this._.core._.e.hasFocus) {
+		this.focus();
+	}
 },
 
 _mouseCaptureHandler = function(e) {
