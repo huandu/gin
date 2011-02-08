@@ -527,18 +527,10 @@ GinLayer.prototype = {
                     return value;
                 }),
                 left: _getSetting(s.left, 0, GIN_REGEXP_NUMBER, function(value) {
-                    if (value <= 0) {
-                        return;
-                    }
-                    
                     element.style.left = value + 'px';
                     return value;
                 }),
                 top: _getSetting(s.top, 0, GIN_REGEXP_NUMBER, function(value) {
-                    if (value <= 0) {
-                        return;
-                    }
-                    
                     element.style.top = value + 'px';
                     return value;
                 })
