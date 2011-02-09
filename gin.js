@@ -33,7 +33,6 @@ const GIN_RESIZE_INTERVAL = 100;
 const GIN_REGEXP_NAME = /^[a-zA-Z_\-][a-zA-Z_0-9\-]*$/;
 const GIN_REGEXP_BLANK = /\s+/;
 const GIN_REGEXP_NUMBER = /^-?\d+(\.\d*)?$/;
-const GIN_REGEXP_ANY = /.*/;
 
 const GIN_EVENT_MOUSEMOVE_MAX_HISTORY = 300;
 
@@ -42,14 +41,14 @@ const GIN_FUNC_DUMMY = function() {};
 const GIN_VK_SHIFT = 16;
 const GIN_VK_CTRL = 17;
 const GIN_VK_ALT = 18;
-const GIN_VK_CAPSLOCK = 20;
 
 const GIN_ZINDEX_EVENT_LAYER = 10000;
 const GIN_ZINDEX_DIALOG_LAYER = GIN_ZINDEX_EVENT_LAYER + 1;
 
-var document = window.document;
+var document = window.document,
 
-var Gin = (function(){
+// define the Gin and GinLayers
+Gin = (function(){
     var Gin = function(id, settings, listeners) {
         return new Gin.prototype.init(id, settings, listeners);
     };
@@ -63,7 +62,8 @@ var Gin = (function(){
             
             var s = settings || {},
                 h = listeners || {},
-                element;
+                now = Date.now(),
+                element, layer, receiver;
             
             if (id.nodeType) {
                 element = id;
@@ -80,7 +80,6 @@ var Gin = (function(){
             }
             
             // initialize gin attributes.
-            var now = Date.now();
             this._ = {
                 element: element,
                 state: GIN_STATE_INIT,
@@ -154,7 +153,7 @@ var Gin = (function(){
             this._.interval = 1000. / this._.fps;
             
             // create root layer. it's the parent of any other layers.
-            var layer = GinLayer.prototype.create({
+            layer = GinLayer.prototype.create({
                 width: this._.width,
                 height: this._.height,
                 left: 0,
@@ -183,7 +182,7 @@ var Gin = (function(){
             this._.layer = layer;
             
             // receiver is the div receive all keyboard/mouse events
-            var receiver = document.createElement('div');
+            receiver = document.createElement('div');
             this._.receiver = receiver;
             receiver._ = {core: this};
             receiver.style.position = 'absolute';
@@ -238,8 +237,7 @@ var Gin = (function(){
             
             this._.listeners.start.call(this.layer());
             this._.frameRenderingTimeInSecond = Date.now() % 1000;
-            var layer = this.layer(),
-                self = this;
+            var self = this;
             
             this._.timer = window.setInterval(function() {
                 var now = Date.now(),
@@ -395,17 +393,16 @@ var Gin = (function(){
         },
         resize: function(width, height) {
             var w = width || this._.element.clientWidth,
-                h = height || this._.element.clientHeight;
+                h = height || this._.element.clientHeight,
+                element = this._.element,
+                receiver = this._.receiver,
+                layer = this.layer(),
+                needResize = false;
             
             if (isNaN(w) || w < 0 || isNaN(h) || h < 0) {
                 _error('invalid width or height');
                 return this;
             }
-            
-            var element = this._.element,
-                receiver = this._.receiver,
-                layer = this.layer(),
-                needResize = false;
             
             if (w != this._.width) {
                 needResize = true;
@@ -451,456 +448,463 @@ var Gin = (function(){
             return e;
         }
     };
-    
-    Gin.prototype.init.prototype = Gin.prototype;
-    return (window.$G = window.Gin = Gin);
-})();
 
-function GinLayer() {}
-GinLayer.prototype = {
-    create: function(settings, listeners) {
-        var layer = new GinLayer(),
-            s = settings || {},
-            h = listeners || {};
+    function GinLayer() {}
+    GinLayer.prototype = {
+        create: function(settings, listeners) {
+            var layer = new GinLayer(),
+                s = settings || {},
+                h = listeners || {},
+                element, canvas;
 
-        if (s.parent !== null && !(s.parent instanceof GinLayer)) {
-            _error('parent must be GinLayer instance or null');
-            return;
-        }
-        
-        if (!s.core) {
-            _error('core must be set');
-            return;
-        }
+            if (s.parent !== null && !(s.parent instanceof GinLayer)) {
+                _error('parent must be GinLayer instance or null');
+                return;
+            }
+            
+            if (!s.core) {
+                _error('core must be set');
+                return;
+            }
 
-        if (!s.name) {
-            _error('layer must have a string name');
-            return;
-        }
-        
-        if (!s.parentElement) {
-            _error('parent element must be set when parent is null');
-            return;
-        }
-        
-        var element = document.createElement('div');
-        element.style.position = 'absolute';
-        element.style.display = 'block';
+            if (!s.name) {
+                _error('layer must have a string name');
+                return;
+            }
+            
+            if (!s.parentElement) {
+                _error('parent element must be set when parent is null');
+                return;
+            }
+            
+            element = document.createElement('div');
+            element.style.position = 'absolute';
+            element.style.display = 'block';
 
-        layer._ = {
-            name: s.name,
-            parent: s.parent,
-            core: s.core,
-            element: element,
-            parentElement: s.parentElement,
-            layers: {},
-            newStyle: {},
-            data: _getSetting(s.data, {}),
-            dataHooks: {},
-            offsetX: 0,
-            offsetY: 0,
-            detached: s.parent? false: true,
-            dialogMode: false,
-            attachment: _getSetting(s.attachment, null, function(value) {
-                if (!value || !value.nodeType) {
-                    _error('attachment must be a DOM element');
+            layer._ = {
+                name: s.name,
+                parent: s.parent,
+                core: s.core,
+                element: element,
+                parentElement: s.parentElement,
+                layers: {},
+                newStyle: {},
+                data: _getSetting(s.data, {}),
+                dataHooks: {},
+                offsetX: 0,
+                offsetY: 0,
+                detached: s.parent? false: true,
+                dialogMode: false,
+                attachment: _getSetting(s.attachment, null, function(value) {
+                    if (!value || !value.nodeType) {
+                        _error('attachment must be a DOM element');
+                        return;
+                    }
+                    
+                    return value;
+                }),
+                style: {
+                    width: _getSetting(s.width, 0, GIN_REGEXP_NUMBER, function(value) {
+                        if (value <= 0) {
+                            return;
+                        }
+                        
+                        element.style.width = value + 'px';
+                        return value;
+                    }),
+                    height: _getSetting(s.height, 0, GIN_REGEXP_NUMBER, function(value) {
+                        if (value <= 0) {
+                            return;
+                        }
+                        
+                        element.style.height = value + 'px';
+                        return value;
+                    }),
+                    left: _getSetting(s.left, 0, GIN_REGEXP_NUMBER, function(value) {
+                        element.style.left = value + 'px';
+                        return value;
+                    }),
+                    top: _getSetting(s.top, 0, GIN_REGEXP_NUMBER, function(value) {
+                        element.style.top = value + 'px';
+                        return value;
+                    })
+                },
+                listeners: {
+                    beforerender: _parseListener(h, 'beforerender'),
+                    render: _parseListener(h, 'render'),
+                    destroy: _parseListener(h, 'destroy'),
+                    size: _parseListener(h, 'size'),
+                    play: _parseListener(h, 'play'),
+                    stop: _parseListener(h, 'stop')
+                }
+            };
+            
+            if (s.parent) {
+                layer._.offsetX = s.parent.offsetX + s.parent.left;
+                layer._.offsetY = s.parent.offsetY + s.parent.top;
+            }
+            
+            canvas = document.createElement('canvas');
+            canvas.style.position = 'absolute';
+            canvas.style.left = 0;
+            canvas.style.top = 0;
+            canvas.style.width = layer._.style.width + 'px';
+            canvas.style.height = layer._.style.height + 'px';
+            canvas.width = layer._.style.width;
+            canvas.height = layer._.style.height;
+            element.appendChild(canvas);
+            layer._.canvas = canvas;
+            layer._.parentElement.appendChild(element);
+            
+            if (layer._.attachment) {
+                element.appendChild(layer._.attachment);
+            }
+            
+            if (_getSetting(s.hidden, false, function(value) {
+                return value === true? value: undefined;
+            })) {
+                layer.hide();
+            }
+            
+            if (_getSetting(s.autoPlay, true, function(value) {
+                return value === false? value: undefined;
+            })) {
+                layer.play();
+            }
+            
+            if (_getSetting(s.dialogMode, false, function(value) {
+                return value === true? value: undefined;
+            })) {
+                layer.dialog(true);
+            }
+            
+            return layer;
+        },
+        layers: function(name, settings, listeners) {
+            var s = settings || {},
+                names = name,
+                topLevelName, layer;
+
+            if (settings === undefined) {
+                if (typeof name !== 'string' && !(name instanceof Array)) {
+                    _error('name must be string or array');
+                    return;
+                }
+
+                if (this._.layers[name]) {
+                    return this._.layers[name];
+                }
+                
+                if (typeof name === 'string') {
+                    names = name.split(GIN_REGEXP_BLANK);
+                }
+                
+                if (!names.shift) {
+                    _error('names must be array or string');
                     return;
                 }
                 
-                return value;
-            }),
-            style: {
-                width: _getSetting(s.width, 0, GIN_REGEXP_NUMBER, function(value) {
-                    if (value <= 0) {
-                        return;
-                    }
-                    
-                    element.style.width = value + 'px';
-                    return value;
-                }),
-                height: _getSetting(s.height, 0, GIN_REGEXP_NUMBER, function(value) {
-                    if (value <= 0) {
-                        return;
-                    }
-                    
-                    element.style.height = value + 'px';
-                    return value;
-                }),
-                left: _getSetting(s.left, 0, GIN_REGEXP_NUMBER, function(value) {
-                    element.style.left = value + 'px';
-                    return value;
-                }),
-                top: _getSetting(s.top, 0, GIN_REGEXP_NUMBER, function(value) {
-                    element.style.top = value + 'px';
-                    return value;
-                })
-            },
-            listeners: {
-                beforerender: _parseListener(h, 'beforerender'),
-                render: _parseListener(h, 'render'),
-                destroy: _parseListener(h, 'destroy'),
-                size: _parseListener(h, 'size'),
-                play: _parseListener(h, 'play'),
-                stop: _parseListener(h, 'stop')
+                topLevelName = names.shift();
+                
+                if (!this._.layers[topLevelName]) {
+                    _error('layer does not exist. [name: ' + topLevelName + ']');
+                    return;
+                }
+                
+                if (names.length) {
+                    return this._.layers[topLevelName].layers(names);
+                } else {
+                    return this._.layers[topLevelName];
+                }
             }
-        };
-        
-        if (s.parent) {
-            layer._.offsetX = s.parent.offsetX + s.parent.left;
-            layer._.offsetY = s.parent.offsetY + s.parent.top;
-        }
-        
-        var canvas = document.createElement('canvas');
-        canvas.style.position = 'absolute';
-        canvas.style.left = 0;
-        canvas.style.top = 0;
-        canvas.style.width = layer._.style.width + 'px';
-        canvas.style.height = layer._.style.height + 'px';
-        canvas.width = layer._.style.width;
-        canvas.height = layer._.style.height;
-        element.appendChild(canvas);
-        layer._.canvas = canvas;
-        layer._.parentElement.appendChild(element);
-        
-        if (layer._.attachment) {
-            element.appendChild(layer._.attachment);
-        }
-        
-        if (_getSetting(s.hidden, false, function(value) {
-            return value === true? value: undefined;
-        })) {
-            layer.hide();
-        }
-        
-        if (_getSetting(s.autoPlay, true, function(value) {
-            return value === false? value: undefined;
-        })) {
-            layer.play();
-        }
-        
-        if (_getSetting(s.dialogMode, false, function(value) {
-            return value === true? value: undefined;
-        })) {
-            layer.dialog(true);
-        }
-        
-        return layer;
-    },
-    layers: function(name, settings, listeners) {
-        if (settings === undefined) {
-            if (typeof name !== 'string' && !(name instanceof Array)) {
-                _error('name must be string or array');
-                return;
-            }
-
+            
             if (this._.layers[name]) {
-                return this._.layers[name];
+                _debug('layer already exists. [name: ' + name + ']');
+                return this;
             }
             
-            var names = name;
-            
-            if (typeof name === 'string') {
-                names = name.split(GIN_REGEXP_BLANK);
-            }
-            
-            var topLevelName = names.shift();
-            
-            if (!this._.layers[topLevelName]) {
-                _error('layer does not exist. [name: ' + topLevelName + ']');
+            if (!GIN_REGEXP_NAME.test(name)) {
+                _error('invalid layer name. [name: ' + name + ']');
                 return;
             }
             
-            if (names.length) {
-                return this._.layers[topLevelName].layers(names);
-            } else {
-                return this._.layers[topLevelName];
+            s.parent = this;
+            s.parentElement = this._.element;
+            s.core = this.core();
+            s.name = name;
+            layer = this.create(s, listeners);
+            
+            if (!layer) {
+                _error('cannot create new layer');
+                return;
             }
-        }
-        
-        var s = settings || {};
-        
-        if (this._.layers[name]) {
-            _debug('layer already exists. [name: ' + name + ']');
+            
+            this._.layers[name] = layer;
             return this;
-        }
-        
-        if (!GIN_REGEXP_NAME.test(name)) {
-            _error('invalid layer name. [name: ' + name + ']');
-            return;
-        }
-        
-        s.parent = this;
-        s.parentElement = this._.element;
-        s.core = this.core();
-        s.name = name;
-        var layer = this.create(s, listeners);
-        
-        if (!layer) {
-            _error('cannot create new layer');
-            return;
-        }
-        
-        this._.layers[name] = layer;
-        return this;
-    },
-    name: function() {
-        return this._.name;
-    },
-    parent: function() {
-        return this._.parent;
-    },
-    core: function() {
-        return this._.core;
-    },
-    element: function() {
-        return this._.element;
-    },
-    style: function(property, value) {
-        var style = this._.newStyle;
-        
-        // white list mode. only support following styles.
-        switch (property) {
-        case 'width':
-        case 'height':
-        case 'top':
-        case 'left':
-            if (this._.style[property] != value) {
-                style[property] = value + 'px';
-            }
-        }
-
-        return this;
-    },
-    left: function(val) {
-        if (val === undefined) {
-            return this._.style.left;
-        }
-        
-        if (GIN_REGEXP_NUMBER.test(val)) {
-            this.style('left', val);
-        }
-        
-        return this;
-    },
-    top: function(val) {
-        if (val === undefined) {
-            return this._.style.top;
-        }
-        
-        if (GIN_REGEXP_NUMBER.test(val)) {
-            this.style('top', val);
-        }
-        
-        return this;
-    },
-    width: function(val) {
-        if (val === undefined) {
-            return this._.style.width;
-        }
-        
-        if (!this._.parent && !_verifyFriendMethod(arguments)) {
-            _error('unauthorized call to this function');
-            return this;
-        }
-        
-        if (GIN_REGEXP_NUMBER.test(val) && val >= 0) {
-            this.style('width', val);
-        }
-        
-        return this;
-    },
-    height: function(val) {
-        if (val === undefined) {
-            return this._.style.height;
-        }
-        
-        if (!this._.parent && !_verifyFriendMethod(arguments)) {
-            _error('unauthorized call to this function');
-            return this;
-        }
-        
-        if (GIN_REGEXP_NUMBER.test(val) && val >= 0) {
-            this.style('height', val);
-        }
-        
-        return this;
-    },
-    draw: function(callback) {
-        if (!(callback instanceof Function)) {
-            _error('callback must be a function');
-            return this;
-        }
-        
-        var e = _GinLayer_cloneEvent.call(this);
-        e.context = this._.canvas.getContext('2d');
-        e.context.save();
-        callback.call(this, e);
-        e.context.restore();
-        _GinLayer_fixOffset.call(this);
-        
-        return this;
-    },
-    remove: function(name) {
-        if (!this._.layers[name]) {
-            _error('layer does not exist. [name: ' + name + ']');
-            return this;
-        }
-        
-        var layer = this._.layers[name]
-        delete this._.layers[name];
-        this._.element.removeChild(layer._.element);
-        
-        return this;
-    },
-    detach: function() {
-        if (this._.parent) {
-            this._.parent.remove(this._.name);
-        }
-        
-        this._.detached = true;
-        this._.parent = null;
-        return this;
-    },
-    attach: function(layer) {
-        if (!(layer instanceof GinLayer)) {
-            _error('only GinLayer instance can be attached');
-            return this;
-        }
-        
-        if (!layer._.detached) {
-            _error('layer is not detached');
-            return this;
-        }
-        
-        if (this._.layers[layer._.name]) {
-            _error('layer name conflicts. [name: ' + layer._.name + ']');
-            return this;
-        }
-        
-        this._.layers[layer._.name] = layer;
-        layer._.parent = this;
-        layer._.detached = false;
-        return this;
-    },
-    attachTo: function(layer) {
-    },
-    updateStyle: function() {
-        for (var i in this._.layers) {
-            this._.layers[i].updateStyle();
-        }
-        
-        var style = this._.newStyle,
-            element = this._.element,
-            canvas = this._.canvas;
-        
-        if (_emptyObject(style)) {
-            return this;
-        }
-        
-        for (var i in style) {
-            this._.element.style[i] = style[i];
-            this._.style[i] = Math.round(parseFloat(style[i]));
-        }
-        
-        for (var i in style) {
-            switch (i) {
+        },
+        name: function() {
+            return this._.name;
+        },
+        parent: function() {
+            return this._.parent;
+        },
+        core: function() {
+            return this._.core;
+        },
+        element: function() {
+            return this._.element;
+        },
+        style: function(property, value) {
+            var style = this._.newStyle;
+            
+            // white list mode. only support following styles.
+            switch (property) {
             case 'width':
             case 'height':
-                canvas.style[i] = style[i];
-                canvas[i] = Math.round(parseFloat(style[i]));
-                break;
-            }
-        }
-        
-        this._.newStyle = {};
-        return this;
-    },
-    data: function(key, value, hook) {
-        if (key === undefined) {
-            _error('data key cannot be undefined');
-            return;
-        }
-        
-        if (value === undefined) {
-            return this._.data[key];
-        }
-        
-        if (hook instanceof Function) {
-            this._.dataHooks[key] = hook;
-        }
-        
-        if (this._.dataHooks[key]) {
-            this._.dataHooks[key].call(this, value, this._.data[key]);
-        }
-        
-        this._.data[key] = value;
-        return this;
-    },
-    beforerender: function(listener) {
-        return _GinLayer_addOrCallListener.call(this,
-            'beforerender', listener, this._.playing, this._.playing, function() {
-                return _GinLayer_cloneEvent.call(this);
-            });
-    },
-    render: function(listener) {
-        return _GinLayer_addOrCallListener.call(this,
-            'render', listener, false, this._.playing, function() {
-                this.draw(this._.listeners.render);
-            });
-    },
-    destroy: function(listener) {
-        return _GinLayer_addOrCallListener.call(this,
-            'destroy', listener, true, true, function() {
-                var parent = this._.parent;
-                
-                if (parent) {
-                    parent.remove(this.name());
+            case 'top':
+            case 'left':
+                if (this._.style[property] != value) {
+                    style[property] = value + 'px';
                 }
-            });
-    },
-    play: function(listener) {
-        return _GinLayer_addOrCallListener.call(this,
-            'play', listener, !this._.playing, false, function() {
-                this._.playing = true;
-            });
-    },
-    stop: function(listener) {
-        return _GinLayer_addOrCallListener.call(this,
-            'stop', listener, this._.playing, false, function() {
-                this._.playing = false;
-            });
-    },
-    size: function(listener) {
-        return _GinLayer_addOrCallListener.call(this,
-            'size', listener, true, true, function() {
-                return {
-                    width: this.core().width(),
-                    height: this.core().height()
-                };
-            });
-    },
-    show: function() {
-        this._.element.style.display = 'block';
-        return this;
-    },
-    hide: function() {
-        this._.element.style.display = 'none';
-        return this;
-    },
-    dialog: function(mode) {
-        if (mode && !this._.dialogMode) {
-            this._.dialogMode = true;
-            this._.element.style.zIndex = GIN_ZINDEX_DIALOG_LAYER;
-        } else if (!mode && this._.dialogMode) {
-            this._.dialogMode = false;
-            this._.element.style.zIndex = '';
-        }
-        
-        return this;
-    }
-};
+            }
 
-var _GinLayer_cloneEvent = function() {
+            return this;
+        },
+        left: function(val) {
+            if (val === undefined) {
+                return this._.style.left;
+            }
+            
+            if (GIN_REGEXP_NUMBER.test(val)) {
+                this.style('left', val);
+            }
+            
+            return this;
+        },
+        top: function(val) {
+            if (val === undefined) {
+                return this._.style.top;
+            }
+            
+            if (GIN_REGEXP_NUMBER.test(val)) {
+                this.style('top', val);
+            }
+            
+            return this;
+        },
+        width: function(val) {
+            if (val === undefined) {
+                return this._.style.width;
+            }
+            
+            if (!this._.parent && !_verifyFriendMethod(arguments)) {
+                _error('unauthorized call to this function');
+                return this;
+            }
+            
+            if (GIN_REGEXP_NUMBER.test(val) && val >= 0) {
+                this.style('width', val);
+            }
+            
+            return this;
+        },
+        height: function(val) {
+            if (val === undefined) {
+                return this._.style.height;
+            }
+            
+            if (!this._.parent && !_verifyFriendMethod(arguments)) {
+                _error('unauthorized call to this function');
+                return this;
+            }
+            
+            if (GIN_REGEXP_NUMBER.test(val) && val >= 0) {
+                this.style('height', val);
+            }
+            
+            return this;
+        },
+        draw: function(callback) {
+            if (!(callback instanceof Function)) {
+                _error('callback must be a function');
+                return this;
+            }
+            
+            var e = _GinLayer_cloneEvent.call(this);
+            e.context = this._.canvas.getContext('2d');
+            e.context.save();
+            callback.call(this, e);
+            e.context.restore();
+            _GinLayer_fixOffset.call(this);
+            
+            return this;
+        },
+        remove: function(name) {
+            if (!this._.layers[name]) {
+                _error('layer does not exist. [name: ' + name + ']');
+                return this;
+            }
+            
+            var layer = this._.layers[name]
+            delete this._.layers[name];
+            this._.element.removeChild(layer._.element);
+            
+            return this;
+        },
+        detach: function() {
+            if (this._.parent) {
+                this._.parent.remove(this._.name);
+            }
+            
+            this._.detached = true;
+            this._.parent = null;
+            return this;
+        },
+        attach: function(layer) {
+            if (!(layer instanceof GinLayer)) {
+                _error('only GinLayer instance can be attached');
+                return this;
+            }
+            
+            if (!layer._.detached) {
+                _error('layer is not detached');
+                return this;
+            }
+            
+            if (this._.layers[layer._.name]) {
+                _error('layer name conflicts. [name: ' + layer._.name + ']');
+                return this;
+            }
+            
+            this._.layers[layer._.name] = layer;
+            layer._.parent = this;
+            layer._.detached = false;
+            return this;
+        },
+        attachTo: function(layer) {
+        },
+        updateStyle: function() {
+            var style = this._.newStyle,
+                element = this._.element,
+                canvas = this._.canvas,
+                i;
+
+            for (i in this._.layers) {
+                this._.layers[i].updateStyle();
+            }
+            
+            if (_emptyObject(style)) {
+                return this;
+            }
+            
+            for (i in style) {
+                element.style[i] = style[i];
+                this._.style[i] = Math.round(parseFloat(style[i]));
+            }
+            
+            for (i in style) {
+                switch (i) {
+                case 'width':
+                case 'height':
+                    canvas.style[i] = style[i];
+                    canvas[i] = Math.round(parseFloat(style[i]));
+                    break;
+                }
+            }
+            
+            this._.newStyle = {};
+            return this;
+        },
+        data: function(key, value, hook) {
+            if (key === undefined) {
+                _error('data key cannot be undefined');
+                return;
+            }
+            
+            if (value === undefined) {
+                return this._.data[key];
+            }
+            
+            if (hook instanceof Function) {
+                this._.dataHooks[key] = hook;
+            }
+            
+            if (this._.dataHooks[key]) {
+                this._.dataHooks[key].call(this, value, this._.data[key]);
+            }
+            
+            this._.data[key] = value;
+            return this;
+        },
+        beforerender: function(listener) {
+            return _GinLayer_addOrCallListener.call(this,
+                'beforerender', listener, this._.playing, this._.playing, function() {
+                    return _GinLayer_cloneEvent.call(this);
+                });
+        },
+        render: function(listener) {
+            return _GinLayer_addOrCallListener.call(this,
+                'render', listener, false, this._.playing, function() {
+                    this.draw(this._.listeners.render);
+                });
+        },
+        destroy: function(listener) {
+            return _GinLayer_addOrCallListener.call(this,
+                'destroy', listener, true, true, function() {
+                    var parent = this._.parent;
+                    
+                    if (parent) {
+                        parent.remove(this.name());
+                    }
+                });
+        },
+        play: function(listener) {
+            return _GinLayer_addOrCallListener.call(this,
+                'play', listener, !this._.playing, false, function() {
+                    this._.playing = true;
+                });
+        },
+        stop: function(listener) {
+            return _GinLayer_addOrCallListener.call(this,
+                'stop', listener, this._.playing, false, function() {
+                    this._.playing = false;
+                });
+        },
+        size: function(listener) {
+            return _GinLayer_addOrCallListener.call(this,
+                'size', listener, true, true, function() {
+                    return {
+                        width: this.core().width(),
+                        height: this.core().height()
+                    };
+                });
+        },
+        show: function() {
+            this._.element.style.display = 'block';
+            return this;
+        },
+        hide: function() {
+            this._.element.style.display = 'none';
+            return this;
+        },
+        dialog: function(mode) {
+            if (mode && !this._.dialogMode) {
+                this._.dialogMode = true;
+                this._.element.style.zIndex = GIN_ZINDEX_DIALOG_LAYER;
+            } else if (!mode && this._.dialogMode) {
+                this._.dialogMode = false;
+                this._.element.style.zIndex = '';
+            }
+            
+            return this;
+        }
+    };
+        
+    Gin.prototype.init.prototype = Gin.prototype;
+    return Gin;
+})(),
+
+_GinLayer_cloneEvent = function() {
     var e = this.core().cloneEvent();
     e.layerName = this._.name;
     
@@ -916,9 +920,9 @@ var _GinLayer_cloneEvent = function() {
     e.layer = this;
     
     return e;
-};
+},
 
-var _GinLayer_fixOffset = function() {
+_GinLayer_fixOffset = function() {
     var element = this.element(),
         left = element.style.left || 0,
         top = element.style.top || 0;
@@ -930,22 +934,23 @@ var _GinLayer_fixOffset = function() {
     if (this.top() != Math.round(parseFloat(top, 10))) {
         this.top(top);
     }
-};
+},
 
-var _GinLayer_addOrCallListener = function(name, listener, callMe, callChild, action) {
+_GinLayer_addOrCallListener = function(name, listener, callMe, callChild, action) {
     if (listener instanceof Function) {
         this._.listeners[name] = listener;
         return this;
     }
     
-    var e = undefined;
+    var e = undefined,
+        i;
     
     if ((callChild || callMe) && action) {
         e = action.call(this)
     }
     
     if (callChild) {
-        for (var i in this._.layers) {
+        for (i in this._.layers) {
             this._.layers[i][name].call(this._.layers[i], e);
         }
     }
@@ -955,27 +960,24 @@ var _GinLayer_addOrCallListener = function(name, listener, callMe, callChild, ac
     }
     
     return this;
-};
+},
 
-var _specialKeys = [];
-_specialKeys[GIN_VK_SHIFT] = true;
-_specialKeys[GIN_VK_CTRL] = true;
-_specialKeys[GIN_VK_ALT] = true;
+_deepClone = function(obj) {
+    var newObject = new obj.constructor(),
+        i;
 
-function _deepClone(obj) {
-    var newObject = new obj.constructor();
     newObject.__proto__ = obj;
     
-    for (var i in newObject) {
+    for (i in newObject) {
         if (typeof newObject[i] === 'object') {
             newObject[i] = _deepClone(newObject[i]);
         }
     }
     
     return newObject;
-};
+},
 
-var _debug = function() {
+_debug = function() {
     try {
         console.debug.apply(console, arguments);
     } catch (e) {
@@ -1193,16 +1195,16 @@ _setFriendMethod = function(caller, callee) {
 _verifyFriendMethod = function(args) {
     try {
         var callee = args.callee,
-            caller = callee.caller
+            caller = callee.caller,
+            calleeString = callee.toString(),
+            friends = caller._friends,
+            i;
         
         if (!caller || !caller._friends) {
             return false;
         }
         
-        var calleeString = callee.toString(),
-            friends = caller._friends;
-        
-        for (var i in friends) {
+        for (i in friends) {
             if (friends[i] === calleeString) {
                 return true;
             }
@@ -1215,10 +1217,6 @@ _verifyFriendMethod = function(args) {
 },
 
 _emptyObject = function(obj) {
-    if (obj instanceof Array) {
-        return obj.length == 0;
-    }
-    
     for (var i in obj) {
         return false;
     }
@@ -1226,5 +1224,11 @@ _emptyObject = function(obj) {
     return true;
 },
 
-_;
+_specialKeys = [];
+
+_specialKeys[GIN_VK_SHIFT] = true;
+_specialKeys[GIN_VK_CTRL] = true;
+_specialKeys[GIN_VK_ALT] = true;
+
+window.$G = window.Gin = Gin;
 })(window);
