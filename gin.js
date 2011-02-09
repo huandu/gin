@@ -103,7 +103,7 @@ var Gin = (function(){
                     clientX: 0,
                     clientY: 0,
                     mouseover: false,
-                    hasFocus: true,
+                    hasFocus: true
                 },
                 mousemoveHistory: {
                     current: 0,
