@@ -1146,13 +1146,13 @@ _traverseHistory = function(callback) {
         last = history.traverseLast,
         i = last,
         cur = null,
-        prev = history[i];
+        prev = history[i],
+        ret;
     
     // history is empty.
     if (current == last) {
         return this;
     }
-    
     
     do {
         i = (i + 1) % GIN_EVENT_MOUSEMOVE_MAX_HISTORY;
@@ -1164,9 +1164,9 @@ _traverseHistory = function(callback) {
             timeStamp: history[i].timeStamp
         };
         
-        callback.call(this.layer, cur, prev);
+        ret = callback.call(this.layer, cur, prev);
         prev = cur;
-    } while (i != current);
+    } while (i != current && ret !== false);
     
     return this;
 },
