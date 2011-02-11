@@ -13,39 +13,39 @@ replace /_error\(/ //_error(
 }}#*/
 
 (function(window, undefined){
-const GIN_FPS_DEFAULT = 30;
-const GIN_FPS_MIN = 1;
-const GIN_FPS_MAX = 100;
+var GIN_FPS_DEFAULT = 30,
+GIN_FPS_MIN = 1,
+GIN_FPS_MAX = 100,
 
-const GIN_STATE_INIT = 1;
-const GIN_STATE_STARTED = 2;
-const GIN_STATE_PAUSED = 3;
-const GIN_STATE_STOPPED = 4;
+GIN_STATE_INIT = 1,
+GIN_STATE_STARTED = 2,
+GIN_STATE_PAUSED = 3,
+GIN_STATE_STOPPED = 4,
 
-const GIN_MOUSESTATE_MOVE = 1;
-const GIN_MOUSESTATE_DOWN = 2;
-const GIN_MOUSESTATE_UP = 3;
+GIN_MOUSESTATE_MOVE = 1,
+GIN_MOUSESTATE_DOWN = 2,
+GIN_MOUSESTATE_UP = 3,
 
-const GIN_INTERVAL_TOLERANCE = 5;
+GIN_INTERVAL_TOLERANCE = 5,
 
-const GIN_RESIZE_INTERVAL = 100;
+GIN_RESIZE_INTERVAL = 100,
 
-const GIN_REGEXP_NAME = /^[a-zA-Z_\-][a-zA-Z_0-9\-]*$/;
-const GIN_REGEXP_BLANK = /\s+/;
-const GIN_REGEXP_NUMBER = /^-?\d+(\.\d*)?$/;
+GIN_REGEXP_NAME = /^[a-zA-Z_\-][a-zA-Z_0-9\-]*$/,
+GIN_REGEXP_BLANK = /\s+/,
+GIN_REGEXP_NUMBER = /^-?\d+(\.\d*)?$/,
 
-const GIN_EVENT_MOUSEMOVE_MAX_HISTORY = 300;
+GIN_EVENT_MOUSEMOVE_MAX_HISTORY = 300,
 
-const GIN_FUNC_DUMMY = function() {};
+GIN_FUNC_DUMMY = function() {},
 
-const GIN_VK_SHIFT = 16;
-const GIN_VK_CTRL = 17;
-const GIN_VK_ALT = 18;
+GIN_VK_SHIFT = 16,
+GIN_VK_CTRL = 17,
+GIN_VK_ALT = 18,
 
-const GIN_ZINDEX_EVENT_LAYER = 10000;
-const GIN_ZINDEX_DIALOG_LAYER = GIN_ZINDEX_EVENT_LAYER + 1;
+GIN_ZINDEX_EVENT_LAYER = 10000,
+GIN_ZINDEX_DIALOG_LAYER = GIN_ZINDEX_EVENT_LAYER + 1,
 
-var document = window.document,
+document = window.document,
 
 // define the Gin and GinLayers
 Gin = (function(){
@@ -963,18 +963,20 @@ _GinLayer_addOrCallListener = function(name, listener, callMe, callChild, action
 },
 
 _deepClone = function(obj) {
-    var newObject = new obj.constructor(),
-        i;
-
-    newObject.__proto__ = obj;
+    var copy = {},
+        target, i;
     
-    for (i in newObject) {
-        if (typeof newObject[i] === 'object') {
-            newObject[i] = _deepClone(newObject[i]);
+    for (i in obj) {
+        target = obj[i];
+        
+        if (typeof target === 'object') {
+            copy[i] = _deepClone(target);
+        } else {
+            copy[i] = target;
         }
     }
     
-    return newObject;
+    return copy;
 },
 
 _debug = function() {
