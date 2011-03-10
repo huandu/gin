@@ -1,6 +1,6 @@
 ﻿Welcome to send me feedback in github or "@huandu":http://twitter.com/huandu on twitter.
 
-If you want to play with <code>gin</code> now, see "gin-samples":https://github.com/huandu/gin-samples on github.
+If you want to play with <code>gin</code> now, see Clone the "gin-samples":https://github.com/huandu/gin-samples project on github for sample source code.
 
 h2. What's the gin
 
@@ -18,22 +18,25 @@ With <code>gin</code>, developers should be able to focus on game logic and grap
 
 <code>gin</code> caches all keyboard/mouse events. Developers must process these events inside beforerender/render callbacks rather than directly receiving events by adding listerners. It's a different thinking model comparing to other engines. This model will benefit a lot in long term.
 
-I may add hit test and WebGL support in it, but it's not certain at this point.
+I may add WebGL support in the future.
 
 h3. Non-Goals
 
 It will never include
 * Canvas scene graph api
 * Physical engine
+* Hit test
+* General purpose algorithms, e.g. Array.each. I don't want to waste my life.
 
-It's highly recommended to use <code>gin</code> with other mature js frameworks to complete more tasks.
+It's highly recommended to use <code>gin</code> with other js frameworks to complete more tasks.
 
-For instance, developers can use "jQuery":http://jquery.com/ to animate layers. It also means, <code>gin</code> will not include any layer animation support.
+For instance, developers can use "jQuery":http://jquery.com/ to animate DOM elements. It also means, <code>gin</code> will not include any DOM element animation support.
 
-I don't want to reinvent any wheel. If I'm doing so, please let me know.
+I don't want to reinvent wheel. If I'm doing so, please let me know.
 
 h2. Browser Compatability
 
 The <code>gin</code> is tested on
 * Chrome 8/10
-* Firefox 3.6
+* Firefox 3.6/4.0
+* Internet Explorer 9.0

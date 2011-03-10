@@ -1,0 +1,22 @@
+TODO List for gin
+===============================================
+
+Current goal is to make gin workable on mobile device. Long term goal is to implement all Flash equilevant features, including 'movie clip lib' and better animation control.
+
+Current stage:
+
+1. Multi touch and gesture support (iOS and Android)
+
+2. More effective layer design - only render visible layers.
+It's very helpful for the 'movie clip lib' in my next step.
+
+Next step:
+1. The movie clip lib.
+I will implement a animation compiler to generate and parse intermedia animation code. Think of the shader language in WebGL. It should be quite like that.
+And I will try to use Wallaby's output directly in gin. However, I don't know whether it's really doable now.
+
+2. Redraw rectangle.
+It's not wise to call clearRect() against full canvas. The ideal way is to update necessary part only.
+
+3. The light weight layer
+Currently, a layer is a stand alone div with canvas element. Moving a layer is actually moving DOM element. It's too expensive. Light weight layer should be a logic layer sharing canvas with other layer. Moving it is to redraw it on canvas.
