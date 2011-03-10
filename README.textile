@@ -1,12 +1,12 @@
 ﻿Welcome to send me feedback in github or "@huandu":http://twitter.com/huandu on twitter.
 
-If you want to play with <code>gin</code> now, see Clone the "gin-samples":https://github.com/huandu/gin-samples project on github for sample source code.
+If you want to play with <code>gin</code> now, see "here":http://www.realdodo.com/gin-samples. Clone the "gin-samples":https://github.com/huandu/gin-samples project on github for sample source code.
 
 h2. What's the gin
 
-The <code>gin</code> is a Game Interactive eNgine. It's designed for HTML5 games on modern browser.
+The <code>gin</code> is a Game Interactive eNgine. It's designed for HTML5 games on modern browser and mobile device.
 
-<code>gin</code> is a light-weight engine. Unlike other engines, it doesn't require any OOP knowledge and pre-compile work. It is straight forward.
+<code>gin</code> is a light-weight engine. Unlike other engines, it doesn't require any OOP knowledge and pre-compile work. It is very straight forward.
 
 Gin is also a kind of distilled beverage, but I've never tried it.
 
