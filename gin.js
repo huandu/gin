@@ -206,6 +206,9 @@ Gin = (function(){
             receiver.addEventListener('mouseup', _mousebuttonHandler, false);
             receiver.addEventListener('contextmenu', _contextmenuHandler, false);
             receiver.addEventListener('mousemove', _mousemoveHandler, false);
+            receiver.addEventListener('touchstart', _touchstartHandler, false);
+            receiver.addEventListener('touchmove', _touchmoveHandler, false);
+            receiver.addEventListener('touchend', _touchendHandler, false);
             
             if (_getSetting(s.autoStart, true, function(value) {
                 return value === false? value: undefined;
@@ -1119,6 +1122,42 @@ _mouseCaptureHandler = function(e) {
 
 _contextmenuHandler = function(e) {
     e.preventDefault();
+},
+
+_touchstartHandler = function(e) {
+    if (!this._ || !this._.core) {
+        _error('cannot find GinCore information');
+        return;
+    }
+    
+    var evt = this._.core._.e;
+    evt.buttonStates[0] = true; // hardcode for left button
+    
+    // TODO: test code for Android only
+    e.preventDefault();
+    e.mouseState = GIN_MOUSESTATE_DOWN;
+    _mousemoveHandler.call(this, e.touches[0]);
+    
+    if (!this._.core._.e.hasFocus) {
+        this.focus();
+    }
+},
+
+_touchmoveHandler = function(e) {
+    // TODO: test code for Android only
+    _mousemoveHandler.call(this, e.touches[0]);
+    e.preventDefault();
+},
+
+_touchendHandler = function(e) {
+    if (!this._ || !this._.core) {
+        _error('cannot find GinCore information');
+        return;
+    }
+    
+    var evt = this._.core._.e;
+    delete evt.buttonStates[0]; // hardcode for left button
+    evt.mouseover = false;
 },
 
 _blurHandler = function(e) {
