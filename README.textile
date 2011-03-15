@@ -1,6 +1,6 @@
 ﻿Welcome to send me feedback in github or "@huandu":http://twitter.com/huandu on twitter.
 
-If you want to play with <code>gin</code> now, see "here":http://www.realdodo.com/gin-samples. Clone the "gin-samples":https://github.com/huandu/gin-samples project on github for sample source code.
+If you want to play with <code>gin</code> now, see "live demos":http://www.realdodo.com/gin-samples. Clone the "gin-samples":https://github.com/huandu/gin-samples project on github for sample source code.
 
 h2. What's the gin
 
