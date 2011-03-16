@@ -483,6 +483,8 @@ replace /_error\(/ //_error(
                     core: s.core,
                     element: element,
                     parentElement: s.parentElement,
+                    canvas: null,
+                    context: null,
                     layers: {},
                     newStyle: {},
                     data: _getSetting(s.data, {}),
@@ -1162,8 +1164,13 @@ replace /_error\(/ //_error(
                 return this;
             }
             
+            if (!this._.context) {
+                this._.context = this.getContext(this._.canvas);
+            }
+            
             var e = _GinLayer_cloneEvent.call(this);
-            e.context = this.getContext(this._.canvas);
+            
+            e.context = this._.context;
             e.context.save();
             callback.call(this, e);
             e.context.restore();
