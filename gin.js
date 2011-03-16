@@ -1007,6 +1007,12 @@ replace /_error\(/ //_error(
             prev = cur;
         } while (i != current && ret !== false);
         
+        // record the last traversed history position
+        if ((current + GIN_EVENT_MOUSEMOVE_MAX_HISTORY - i) % GIN_EVENT_MOUSEMOVE_MAX_HISTORY
+            < (current + GIN_EVENT_MOUSEMOVE_MAX_HISTORY - history.last) % GIN_EVENT_MOUSEMOVE_MAX_HISTORY) {
+            history.last = i;
+        }
+        
         return this;
     },
 
