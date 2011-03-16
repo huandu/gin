@@ -164,6 +164,9 @@ replace /_error\(/ //_error(
                     parent: null,
                     parentElement: element
                 }, {
+                    start: _parseListener(h, 'start'),
+                    play: _parseListener(h, 'play'),
+                    stop: _parseListener(h, 'stop'),
                     beforerender: _parseListener(h, 'beforerender'),
                     render: _parseListener(h, 'render'),
                     size: _parseListener(h, 'size'),
@@ -223,12 +226,7 @@ replace /_error\(/ //_error(
             layer: function() {
                 return this._.layer;
             },
-            start: function(listener) {
-                if (listener instanceof Function) {
-                    this._.listeners.start = listener;
-                    return this;
-                }
-                
+            start: function() {
                 if (this._.state == GIN_STATE_STARTED) {
                     return this;
                 }
@@ -240,7 +238,6 @@ replace /_error\(/ //_error(
                     return this;
                 }
                 
-                this._.listeners.start.call(this.layer());
                 this._.frameRenderingTimeInSecond = Date.now() % 1000;
                 this._.timer = window.setInterval((function(self) {
                     return function() {
@@ -293,16 +290,12 @@ replace /_error\(/ //_error(
                     }
                 })(this), 1);
                 this._.state = GIN_STATE_STARTED;
+                this.layer().play();
                 _debug('gin is started');
                 
                 return this;
             },
-            pause: function(listener) {
-                if (listener instanceof Function) {
-                    this._.listeners.pause = listener;
-                    return this;
-                }
-                
+            pause: function() {
                 if (this._.state == GIN_STATE_PAUSED) {
                     return this;
                 }
@@ -312,23 +305,13 @@ replace /_error\(/ //_error(
                     return this;
                 }
                 
-                if (this._.timer) {
-                    window.clearInterval(this._.timer);
-                    this._.timer = 0;
-                }
-                
-                this._.listeners.pause.call(this.layer());
                 this._.state = GIN_STATE_PAUSED;
+                this.layer().stop();
                 _debug('gin is paused');
                 
                 return this;
             },
-            stop: function(listener) {
-                if (listener instanceof Function) {
-                    this._.listeners.stop = listener;
-                    return this;
-                }
-                
+            stop: function() {
                 if (this._.state == GIN_STATE_STOPPED) {
                     return this;
                 }
@@ -344,25 +327,19 @@ replace /_error\(/ //_error(
                     this._.timer = 0;
                 }
                 
-                this._.listeners.stop.call(this.layer());
                 this._.state = GIN_STATE_STOPPED;
+                this.layer().stop();
                 _debug('gin is stopped');
                 
                 return this;
             },
-            restart: function(listener) {
-                if (listener instanceof Function) {
-                    this._.listeners.restart = listener;
-                    return this;
-                }
-                
+            restart: function() {
                 if (this._.state != GIN_STATE_STARTED && this._.state != GIN_STATE_PAUSED) {
                     _error('only GIN_STATE_STARTED and GIN_STATE_PAUSED can be restarted.'
                         + ' [state: ' + this._.state + ']');
                     return this;
                 }
                 
-                this._.listeners.restart.call(this.layer());
                 this.stop();
                 this.start();
                 return this;
@@ -455,7 +432,7 @@ replace /_error\(/ //_error(
             // extend GinLayer prototype
             extend: function(proto) {
                 if (typeof proto != 'object') {
-                    _trace('new prototype object must be an object');
+                    _error('new prototype object must be an object');
                     return;
                 }
                 
@@ -585,6 +562,8 @@ replace /_error\(/ //_error(
                     layer.hide();
                 }
                 
+                _parseListener(h, 'start').call(layer);
+                
                 if (_getSetting(s.autoPlay, true, function(value) {
                     return value === false? value: undefined;
                 })) {
@@ -661,11 +640,25 @@ replace /_error\(/ //_error(
                 this._.layers[name] = layer;
                 return this;
             },
-            detach: function() {
-                if (this._.parent) {
-                    this._.parent.remove(this._.name);
+            remove: function(name) {
+                if (!this._.layers[name]) {
+                    _error('layer does not exist. [name: ' + name + ']');
+                    return this;
                 }
                 
+                var layer = this._.layers[name]
+                delete this._.layers[name];
+                this._.element.removeChild(layer._.element);
+                
+                return this;
+            },
+            detach: function() {
+                if (!this._.parent) {
+                    _error('top layer cannot be detached');
+                    return this;
+                }
+                
+                this._.parent.remove(this._.name);
                 this._.detached = true;
                 this._.parent = null;
                 return this;
@@ -687,6 +680,7 @@ replace /_error\(/ //_error(
                 }
                 
                 this._.layers[layer._.name] = layer;
+                this._.element.appendChild(layer._.element);
                 layer._.parent = this;
                 layer._.detached = false;
                 return this;
@@ -1168,18 +1162,6 @@ replace /_error\(/ //_error(
             callback.call(this, e);
             e.context.restore();
             _GinLayer_fixOffset.call(this);
-            
-            return this;
-        },
-        remove: function(name) {
-            if (!this._.layers[name]) {
-                _error('layer does not exist. [name: ' + name + ']');
-                return this;
-            }
-            
-            var layer = this._.layers[name]
-            delete this._.layers[name];
-            this._.element.removeChild(layer._.element);
             
             return this;
         },
