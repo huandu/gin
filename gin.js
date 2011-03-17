@@ -13,7 +13,7 @@ replace /_error\(/ //_error(
 }}#*/
 
 (function(window, undefined){
-    var GIN_FPS_DEFAULT = 30,
+var GIN_FPS_DEFAULT = 30,
     GIN_FPS_MIN = 1,
     GIN_FPS_MAX = 100,
 
@@ -779,19 +779,31 @@ replace /_error\(/ //_error(
         
         return copy;
     },
-
-    _debug = function() {
+    
+    _logger = function(logger, args) {
         try {
-            console.debug.apply(console, arguments);
+            console[logger].apply(console, args);
         } catch (e) {
+            // workaround for IE9
+            try {
+                var i = 0,
+                    arr = [];
+                for (; i < args.length; i++) {
+                    arr.push(args[i]);
+                }
+                
+                console[logger](arr.join(' '));
+            } catch (e) {
+            }
         }
     },
 
+    _debug = function() {
+        _logger('info', arguments);
+    },
+
     _error = function() {
-        try {
-            console.error.apply(console, arguments);
-        } catch (e) {
-        }
+        _logger('error', arguments);
     },
 
     _updateEventStats = function(e, now) {
