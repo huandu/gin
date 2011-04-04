@@ -9,8 +9,8 @@
 
 /*#{{
 replace /GinToolkit\.debug\(/ //GinToolkit.debug(
-replace /GinToolkit\.error\(/ //GinToolkit\.error(
-replace /GinToolkit\.assert\(/ //GinToolkit\.assert(
+replace /GinToolkit\.error\(/ //GinToolkit.error(
+replace /GinToolkit\.assert\(/ //GinToolkit.assert(
 }}#*/
 
 (function(window, undefined){
@@ -48,18 +48,49 @@ var GIN_FPS_DEFAULT = 30,
 
     document = window.document,
     
-    _class = function(implementation) {
-        if (!(implementation instanceof Function)) {
-            GinToolkit.error('implementation must be a function');
-            return;
+    Class = function(baseClass, extend, staticMethod) {
+        var klass = baseClass?
+                baseClass.extend({}, true): function() {},
+            ext = extend || {},
+            i;
+        
+        if (baseClass) {
+            klass = baseClass.extend({}, true);
+        } else {
+            klass = function() {};
+            klass.extend = function(ext, createNewClass) {
+                var target = this,
+                    i;
+                
+                if (createNewClass) {
+                    target = arguments.callee.call(function() {}, this.prototype);
+                    target.extend = this.extend;
+                    target.create = this.create;
+                }
+                
+                for (i in ext) {
+                    target.prototype[i] = ext[i];
+                }
+                
+                return target;
+            };
+            klass.create = ext.init || function() {
+                return new this();
+            };
         }
         
-        var klass = function() {};
-        implementation.call(klass);
+        if (staticMethod) {
+            for (i in ext) {
+                klass[i] = ext[i];
+            }
+        } else {
+            klass.extend(ext);
+        }
+        
         return klass;
     },
     
-    GinToolkit = _class(function() {
+    GinToolkit = Class(null, (function() {
         var _logger = function(logger, args) {
             try {
                 console[logger].apply(console, args);
@@ -76,257 +107,238 @@ var GIN_FPS_DEFAULT = 30,
                 } catch (e) {
                 }
             }
-        },
-        me = this;
-
-        me.debug = function() {
-            _logger('info', arguments);
         };
 
-        me.error = function() {
-            _logger('error', arguments);
-        },
-        
-        me.assert = function(expr, text) {
-            if (!expr) {
-                _logger('error', 'assertion failed!', text);
-                throw new Error('assertion failed! '+ text);
-            }
-        },
+        return {
+            debug: function() {
+                _logger('info', arguments);
+            },
 
-        me.getSetting = function(value, defValue, regexp, action) {
-            var r = regexp instanceof RegExp? regexp: null,
-                a = action instanceof Function? action:
-                regexp instanceof Function? regexp:
-                function(value) {return value;},
-                val = undefined;
+            error: function() {
+                _logger('error', arguments);
+            },
             
-            if (value !== undefined && (!r || r.test(value))) {
-                val = a(value);
-            }
-            
-            return val === undefined? defValue: val;
-        },
+            assert: function(expr, text) {
+                if (!expr) {
+                    _logger('error', 'assertion failed!', text);
+                    throw new Error('assertion failed! '+ text);
+                }
+            },
 
-        me.parseListener = function(listeners, item) {
-            if (listeners[item] instanceof Function) {
-                return listeners[item];
-            }
-            
-            return GIN_FUNC_DUMMY;
-        },
-        
-        me.setFriendMethod = function(caller, callee) {
-            caller._friends = caller._friends || [];
-            caller._friends.push(callee.toString());
-            return caller;
-        },
-
-        me.verifyFriendMethod = function(args) {
-            try {
-                var callee = args.callee,
-                    caller = callee.caller,
-                    calleeString = callee.toString(),
-                    friends = caller._friends,
-                    i;
+            getSetting: function(value, defValue, regexp, action) {
+                var r = regexp instanceof RegExp? regexp: null,
+                    a = action instanceof Function? action:
+                    regexp instanceof Function? regexp:
+                    function(value) {return value;},
+                    val = undefined;
                 
-                if (!caller || !caller._friends) {
+                if (value !== undefined && (!r || r.test(value))) {
+                    val = a(value);
+                }
+                
+                return val === undefined? defValue: val;
+            },
+
+            parseListener: function(listeners, item) {
+                if (listeners[item] instanceof Function) {
+                    return listeners[item];
+                }
+                
+                return GIN_FUNC_DUMMY;
+            },
+            
+            setFriendMethod: function(caller, callee) {
+                caller._friends = caller._friends || [];
+                caller._friends.push(callee.toString());
+                return caller;
+            },
+
+            verifyFriendMethod: function(args) {
+                try {
+                    var callee = args.callee,
+                        caller = callee.caller,
+                        calleeString = callee.toString(),
+                        friends = caller._friends,
+                        i;
+                    
+                    if (!caller || !caller._friends) {
+                        return false;
+                    }
+                    
+                    for (i in friends) {
+                        if (friends[i] === calleeString) {
+                            return true;
+                        }
+                    }
+                    
+                    return false;
+                } catch (e) {
+                    return false;
+                }
+            },
+
+            emptyObject: function(obj) {
+                for (var i in obj) {
                     return false;
                 }
                 
-                for (i in friends) {
-                    if (friends[i] === calleeString) {
-                        return true;
-                    }
-                }
-                
-                return false;
-            } catch (e) {
-                return false;
+                return true;
             }
-        },
-
-        me.emptyObject = function(obj) {
-            for (var i in obj) {
-                return false;
-            }
-            
-            return true;
-        },
-        
-        me.extendClass = function(baseClass, extra, clone) {
-            if (!(baseClass instanceof Function) || typeof extra != 'object') {
-                GinToolkit.error('baseClass must be a function and new prototype object must be an object');
-                return;
-            }
-            
-            var target = baseClass,
-                i;
-            
-            if (clone) {
-                target = arguments.callee(function() {}, baseClass.prototype);
-            }
-            
-            for (i in extra) {
-                target.prototype[i] = extra[i];
-            }
-            
-            return target;
         };
-    }),
+    })(), true),
     
-    GinCore = _class(function() {
-        this.create = function(id, settings, listeners) {
-            if (!id) {
-                GinToolkit.error('id cannot be empty');
-                return;
-            }
-            
-            var s = settings || {},
-                h = listeners || {},
-                now = Date.now(),
-                gin = new this(),
-                element, layer, receiver, data, style;
-            
-            if (id.nodeType) {
-                element = id;
-            } else if (typeof id === 'string') {
-                element = document.getElementById(id);
-                
-                if (!element) {
-                    GinToolkit.error('cannot find element by id. [id: ' + id + ']');
+    GinCore = Class(null, (function() {
+        return {
+            init: function(id, settings, listeners) {
+                if (!id) {
+                    GinToolkit.error('id cannot be empty');
                     return;
                 }
-            } else {
-                GinToolkit.error('invalid id. [id: ' + id.toString() + ']');
-                return;
-            }
-            
-            // initialize gin attributes.
-            data = gin._ = {
-                element: element,
-                state: GIN_STATE_INIT,
-                framePrepared: false,
-                lastResize: now,
-                hasFocus: true,
-                cachedEvent: {
-                    isOld: true,
-                },
-                listener: GinListener.create(gin),
-                stats: {
-                    frameCount: 0,
-                    mousemoveCount: 0,
-                    fps: 0,
-                    mps: 0,
-                    frameCountInSecond: 0,
-                    lastTime: now
-                },
-                statsReader: function(key) {
-                    return gin._.stats[key];
-                },
-                fps: GinToolkit.getSetting(s.fps, GIN_FPS_DEFAULT, GIN_REGEXP_NUMBER, function(value) {
-                    if (value < GIN_FPS_MIN || value > GIN_FPS_MAX) {
-                        GinToolkit.error('fps setting must in range of [' + GIN_FPS_MIN + ', ' + GIN_FPS_MAX + ']. '
-                            + '[fps: ' + value + ']');
+                
+                var s = settings || {},
+                    h = listeners || {},
+                    now = Date.now(),
+                    gin = new this(),
+                    element, layer, receiver, data, style;
+                
+                if (id.nodeType) {
+                    element = id;
+                } else if (typeof id === 'string') {
+                    element = document.getElementById(id);
+                    
+                    if (!element) {
+                        GinToolkit.error('cannot find element by id. [id: ' + id + ']');
                         return;
                     }
-                    
-                    return value;
-                }),
-                width: GinToolkit.getSetting(s.width, element.clientWidth, GIN_REGEXP_NUMBER, function(value) {
-                    if (value <= 0) {
-                        return;
+                } else {
+                    GinToolkit.error('invalid id. [id: ' + id.toString() + ']');
+                    return;
+                }
+                
+                // initialize gin attributes.
+                data = gin._ = {
+                    element: element,
+                    state: GIN_STATE_INIT,
+                    framePrepared: false,
+                    lastResize: now,
+                    hasFocus: true,
+                    cachedEvent: {
+                        isOld: true,
+                    },
+                    listener: GinListener.create(gin),
+                    stats: {
+                        frameCount: 0,
+                        mousemoveCount: 0,
+                        fps: 0,
+                        mps: 0,
+                        frameCountInSecond: 0,
+                        lastTime: now
+                    },
+                    statsReader: function(key) {
+                        return gin._.stats[key];
+                    },
+                    fps: GinToolkit.getSetting(s.fps, GIN_FPS_DEFAULT, GIN_REGEXP_NUMBER, function(value) {
+                        if (value < GIN_FPS_MIN || value > GIN_FPS_MAX) {
+                            GinToolkit.error('fps setting must in range of [' + GIN_FPS_MIN + ', ' + GIN_FPS_MAX + ']. '
+                                + '[fps: ' + value + ']');
+                            return;
+                        }
+                        
+                        return value;
+                    }),
+                    width: GinToolkit.getSetting(s.width, element.clientWidth, GIN_REGEXP_NUMBER, function(value) {
+                        if (value <= 0) {
+                            return;
+                        }
+                        
+                        element.style.width = value + 'px';
+                        element.width = value;
+                        return value;
+                    }),
+                    height: GinToolkit.getSetting(s.height, element.clientHeight, GIN_REGEXP_NUMBER, function(value) {
+                        if (value <= 0) {
+                            return;
+                        }
+                        
+                        element.style.height = value + 'px';
+                        element.height = value;
+                        return value;
+                    }),
+                    autoPause: GinToolkit.getSetting(s.autoPause, false, function(value) {
+                        return value === true? value: undefined;
+                    }),
+                    listeners: {
+                        start: GinToolkit.parseListener(h, 'start'),
+                        pause: GinToolkit.parseListener(h, 'pause'),
+                        stop: GinToolkit.parseListener(h, 'stop'),
+                        restart: GinToolkit.parseListener(h, 'restart'),
+                        blur: GinToolkit.parseListener(h, 'blur'),
+                        focus: GinToolkit.parseListener(h, 'focus')
                     }
-                    
-                    element.style.width = value + 'px';
-                    element.width = value;
-                    return value;
-                }),
-                height: GinToolkit.getSetting(s.height, element.clientHeight, GIN_REGEXP_NUMBER, function(value) {
-                    if (value <= 0) {
-                        return;
-                    }
-                    
-                    element.style.height = value + 'px';
-                    element.height = value;
-                    return value;
-                }),
-                autoPause: GinToolkit.getSetting(s.autoPause, false, function(value) {
-                    return value === true? value: undefined;
-                }),
-                listeners: {
+                };
+                
+                data.interval = 1000. / data.fps;
+                
+                // create root layer. it's the parent of any other layers.
+                layer = GinLayer.create({
+                    width: data.width,
+                    height: data.height,
+                    left: 0,
+                    top: 0,
+                    core: gin,
+                    name: 'root',
+                    parent: null,
+                    parentElement: element
+                }, {
                     start: GinToolkit.parseListener(h, 'start'),
-                    pause: GinToolkit.parseListener(h, 'pause'),
+                    play: GinToolkit.parseListener(h, 'play'),
                     stop: GinToolkit.parseListener(h, 'stop'),
-                    restart: GinToolkit.parseListener(h, 'restart'),
-                    blur: GinToolkit.parseListener(h, 'blur'),
-                    focus: GinToolkit.parseListener(h, 'focus')
+                    beforerender: GinToolkit.parseListener(h, 'beforerender'),
+                    render: GinToolkit.parseListener(h, 'render'),
+                    size: GinToolkit.parseListener(h, 'size'),
+                    destroy: function() {
+                        gin.stop();
+                    }
+                });
+                
+                if (!layer) {
+                    GinToolkit.error('cannot create default layer instance');
+                    return;
                 }
-            };
-            
-            data.interval = 1000. / data.fps;
-            
-            // create root layer. it's the parent of any other layers.
-            layer = GinLayer.create({
-                width: data.width,
-                height: data.height,
-                left: 0,
-                top: 0,
-                core: gin,
-                name: 'root',
-                parent: null,
-                parentElement: element
-            }, {
-                start: GinToolkit.parseListener(h, 'start'),
-                play: GinToolkit.parseListener(h, 'play'),
-                stop: GinToolkit.parseListener(h, 'stop'),
-                beforerender: GinToolkit.parseListener(h, 'beforerender'),
-                render: GinToolkit.parseListener(h, 'render'),
-                size: GinToolkit.parseListener(h, 'size'),
-                destroy: function() {
-                    gin.stop();
+                
+                // only this.resize is able to change root layer's width/height.
+                // TODO: refactory this
+                GinToolkit.setFriendMethod(gin.resize, layer.width);
+                GinToolkit.setFriendMethod(gin.resize, layer.height);
+                data.layer = layer;
+                
+                // receiver is the div receive all keyboard/mouse events
+                receiver = document.createElement('div');
+                data.receiver = receiver;
+                receiver._ = {core: gin};
+                style = receiver.style;
+                style.position = 'absolute';
+                style.left = 0;
+                style.top = 0;
+                style.width = data.width + 'px';
+                style.height = data.height + 'px';
+                style.zIndex = GIN_ZINDEX_EVENT_LAYER;
+                style.outline = 0;
+                receiver.tabIndex = 1;
+                element.appendChild(receiver);
+                receiver.focus();
+                
+                data.listener.bind(receiver);
+                
+                if (GinToolkit.getSetting(s.autoStart, true, function(value) {
+                    return value === false? value: undefined;
+                })) {
+                    gin.start();
                 }
-            });
-            
-            if (!layer) {
-                GinToolkit.error('cannot create default layer instance');
-                return;
-            }
-            
-            // only this.resize is able to change root layer's width/height.
-            // TODO: refactory this
-            GinToolkit.setFriendMethod(gin.resize, layer.width);
-            GinToolkit.setFriendMethod(gin.resize, layer.height);
-            data.layer = layer;
-            
-            // receiver is the div receive all keyboard/mouse events
-            receiver = document.createElement('div');
-            data.receiver = receiver;
-            receiver._ = {core: gin};
-            style = receiver.style;
-            style.position = 'absolute';
-            style.left = 0;
-            style.top = 0;
-            style.width = data.width + 'px';
-            style.height = data.height + 'px';
-            style.zIndex = GIN_ZINDEX_EVENT_LAYER;
-            style.outline = 0;
-            receiver.tabIndex = 1;
-            element.appendChild(receiver);
-            receiver.focus();
-            
-            data.listener.bind(receiver);
-            
-            if (GinToolkit.getSetting(s.autoStart, true, function(value) {
-                return value === false? value: undefined;
-            })) {
-                gin.start();
-            }
-            
-            return gin;
-        };
+                
+                return gin;
+            },
         
-        this.prototype = {
             start: function() {
                 var data = this._;
                 
@@ -566,16 +578,11 @@ var GIN_FPS_DEFAULT = 30,
                 e.clientX = cache.clientX - offsetX;
                 e.clientY = cache.clientY - offsetY;
                 return e;
-            },
-            // extend GinLayer prototype
-            extend: function(ext) {
-                GinToolkit.extendClass(GinLayer, ext);
-                return this;
             }
         };
-    }),
+    })()),
 
-    GinListener = _class(function() {
+    GinListener = Class(null, (function() {
         var _keyboardHandler = function(e) {
             e.stopPropagation();
             e.preventDefault();
@@ -636,57 +643,71 @@ var GIN_FPS_DEFAULT = 30,
 
         _focusHandler = function(e) {
             this.core().focus();
-        },
-        GinDesktopListener, GiniOSListener, GinAndroidListener;
-        
-        this.create = function(core) {
-            GinToolkit.assert(core, 'invalid core');
-            
-            var userAgent = window.navigator.userAgent,
-                listener = null,
-                callbacks, i, data;
-            
-            // check browser info
-            if (GIN_REGEXP_IPHONE.test(userAgent)) {
-                // iPhone, iPad or iPod touch
-                listener = new GiniOSListener();
-            } else if (GIN_REGEXP_ANDROID.test(userAgent) && GIN_REGEXP_WEBKIT.test(userAgent)) {
-                // Android webkit
-                // Note: Android Firefox 4 doesn't have touch event yet
-                listener = new GinAndroidListener();
-            } else {
-                listener = new GinDesktopListener();
-            }
-            
-            data = listener._ = {
-                core: core,
-                history: GinEventHistory.create(),
-                keyState: {},
-                e: {
-                    // ref: http://www.w3.org/TR/DOM-Level-3-Events/#events-mouseevents
-                    // Note:
-                    // no button attr, as more than 1 button may be pressed.
-                    // no relatedTarget, as I don't want to leak DOM element info.
-                    screenX: 0,
-                    screenY: 0,
-                    clientX: 0,
-                    clientY: 0,
-                    ctrlKey: false,
-                    shiftKey: false,
-                    altKey: false,
-                    metaKey: false,
-                    buttons: 0,
-                    timeStamp: 0
-                }
-            };
-            
-            return listener;
         };
         
-        this.prototype = {
+        return {
+            init: function(core) {
+                GinToolkit.assert(core, 'invalid core');
+                
+                var listener = new this();
+                
+                //// check browser info
+                //if (GIN_REGEXP_IPHONE.test(userAgent)) {
+                //    // iPhone, iPad or iPod touch
+                //    listener = new GiniOSListener();
+                //} else if (GIN_REGEXP_ANDROID.test(userAgent) && GIN_REGEXP_WEBKIT.test(userAgent)) {
+                //    // Android webkit
+                //    // Note: Android Firefox 4 doesn't have touch event yet
+                //    listener = new GinAndroidListener();
+                //} else {
+                //    listener = new GinDesktopListener();
+                //}
+
+                listener._ = {
+                    core: core,
+                    history: GinEventHistory.create(),
+                    keyState: {},
+                    e: {
+                        // ref: http://www.w3.org/TR/DOM-Level-3-Events/#events-mouseevents
+                        // Note:
+                        // no button attr, as more than 1 button may be pressed.
+                        // no relatedTarget, as I don't want to leak DOM element info.
+                        screenX: 0,
+                        screenY: 0,
+                        clientX: 0,
+                        clientY: 0,
+                        ctrlKey: false,
+                        shiftKey: false,
+                        altKey: false,
+                        metaKey: false,
+                        buttons: 0,
+                        timeStamp: 0
+                    }
+                };
+                
+                return listener;
+            },
+        
             bind: function(element) {
                 var self = this,
-                    callbacks = self.callbacks(),
+                    callbacks = {
+                        blur: _blurHandler,
+                        focus: _focusHandler,
+                        keydown: _keyboardHandler,
+                        keyup: _keyboardHandler,
+                        mouseover: _mouseCaptureHandler,
+                        mouseout: _mouseCaptureHandler,
+                        mousedown: _mousebuttonHandler,
+                        mouseup: _mousebuttonHandler,
+                        contextmenu: _contextmenuHandler,
+                        mousemove: _mousemoveHandler,
+                        click: function() {
+                            return false;
+                        },
+                        touchstart: _touchstartHandler,
+                        touchmove: _touchmoveHandler,
+                        touchend: _touchendHandler
+                    },
                     i;
                 
                 for (i in callbacks) {
@@ -794,74 +815,10 @@ var GIN_FPS_DEFAULT = 30,
                 return this._.core;
             }
         };
+    })()),
 
-        GinDesktopListener = GinToolkit.extendClass(this, {
-            callbacks: function() {
-                return {
-                    blur: _blurHandler,
-                    focus: _focusHandler,
-                    keydown: _keyboardHandler,
-                    keyup: _keyboardHandler,
-                    mouseover: _mouseCaptureHandler,
-                    mouseout: _mouseCaptureHandler,
-                    mousedown: _mousebuttonHandler,
-                    mouseup: _mousebuttonHandler,
-                    contextmenu: _contextmenuHandler,
-                    mousemove: _mousemoveHandler
-                };
-            }
-        }, true);
-        
-        GiniOSListener = GinToolkit.extendClass(this, {
-            callbacks: function() {
-                return {
-                    blur: _blurHandler,
-                    focus: _focusHandler,
-                    keydown: _keyboardHandler,
-                    keyup: _keyboardHandler,
-                    mouseover: _mouseCaptureHandler,
-                    mouseout: _mouseCaptureHandler,
-                    mousedown: _mousebuttonHandler,
-                    mouseup: _mousebuttonHandler,
-                    contextmenu: _contextmenuHandler,
-                    mousemove: _mousemoveHandler,
-                    click: function() {
-                        return false;
-                    },
-                    touchstart: _touchstartHandler,
-                    touchmove: _touchmoveHandler,
-                    touchend: _touchendHandler
-                };
-            }
-        }, true);
-        
-        GinAndroidListener = GinToolkit.extendClass(this, {
-            callbacks: function() {
-                return {
-                    blur: _blurHandler,
-                    focus: _focusHandler,
-                    keydown: _keyboardHandler,
-                    keyup: _keyboardHandler,
-                    mouseover: _mouseCaptureHandler,
-                    mouseout: _mouseCaptureHandler,
-                    mousedown: _mousebuttonHandler,
-                    mouseup: _mousebuttonHandler,
-                    contextmenu: _contextmenuHandler,
-                    mousemove: _mousemoveHandler,
-                    click: function() {
-                        return false;
-                    },
-                    touchstart: _touchstartHandler,
-                    touchmove: _touchmoveHandler,
-                    touchend: _touchendHandler
-                };
-            }
-        }, true);
-
-    }),
-
-    GinLayer = _class(function() {
-        var _GinLayer_cloneEvent = function() {
+    GinLayer = Class(null, (function() {
+        var _cloneEvent = function() {
             var e;
             
             if (this._.parent) {
@@ -882,7 +839,7 @@ var GIN_FPS_DEFAULT = 30,
             return e;
         },
 
-        //_GinLayer_fixOffset = function() {
+        //_fixOffset = function() {
         //    var element = this.element(),
         //        left = element.style.left || 0,
         //        top = element.style.top || 0;
@@ -896,7 +853,7 @@ var GIN_FPS_DEFAULT = 30,
         //    }
         //},
 
-        _GinLayer_addOrCallListener = function(name, listener, callMe, callChild, action) {
+        _addOrCallListener = function(name, listener, callMe, callChild, action) {
             if (listener instanceof Function) {
                 this._.listeners[name] = listener;
                 return this;
@@ -923,155 +880,155 @@ var GIN_FPS_DEFAULT = 30,
         },
         
         // call render callbacks
-        _GinLayer_renderCaller = function(e) {
+        _renderCaller = function(e) {
             // TODO: finish it
         },
         
         // call beforerender callbacks
-        _GinLayer_beforerenderCaller = function(e) {
+        _beforerenderCaller = function(e) {
             // TODO: finish it
         };
         
-        this.create = function(settings, listeners) {
-            var layer = new this(),
-                s = settings || {},
-                h = listeners || {},
-                element, canvas, style, data;
+        return {
+            init: function(settings, listeners) {
+                var layer = new this(),
+                    s = settings || {},
+                    h = listeners || {},
+                    element, canvas, style, data;
 
-            if (s.parent !== null && !(s.parent instanceof GinLayer)) {
-                GinToolkit.error('parent must be GinLayer instance or null');
-                return;
-            }
-            
-            if (!s.core) {
-                GinToolkit.error('core must be set');
-                return;
-            }
-
-            if (!s.name) {
-                GinToolkit.error('layer must have a string name');
-                return;
-            }
-            
-            if (!s.parentElement) {
-                GinToolkit.error('parent element must be set');
-                return;
-            }
-            
-            element = document.createElement('div');
-            element.style.position = 'absolute';
-            element.style.display = 'block';
-
-            data = layer._ = {
-                name: s.name,
-                parent: s.parent,
-                core: s.core,
-                element: element,
-                parentElement: s.parentElement,
-                canvas: null,
-                context: null,
-                layers: {},
-                newStyle: {},
-                data: GinToolkit.getSetting(s.data, {}),
-                dataHooks: {},
-                offsetX: 0,
-                offsetY: 0,
-                detached: s.parent? false: true,
-                dialogMode: false,
-                attachment: GinToolkit.getSetting(s.attachment, null, function(value) {
-                    if (!value || !value.nodeType) {
-                        GinToolkit.error('attachment must be a DOM element');
-                        return;
-                    }
-                    
-                    return value;
-                }),
-                style: {
-                    width: GinToolkit.getSetting(s.width, 0, GIN_REGEXP_NUMBER, function(value) {
-                        if (value <= 0) {
-                            return;
-                        }
-                        
-                        element.style.width = value + 'px';
-                        return value;
-                    }),
-                    height: GinToolkit.getSetting(s.height, 0, GIN_REGEXP_NUMBER, function(value) {
-                        if (value <= 0) {
-                            return;
-                        }
-                        
-                        element.style.height = value + 'px';
-                        return value;
-                    }),
-                    left: GinToolkit.getSetting(s.left, 0, GIN_REGEXP_NUMBER, function(value) {
-                        element.style.left = value + 'px';
-                        return value;
-                    }),
-                    top: GinToolkit.getSetting(s.top, 0, GIN_REGEXP_NUMBER, function(value) {
-                        element.style.top = value + 'px';
-                        return value;
-                    })
-                },
-                listeners: {
-                    beforerender: GinToolkit.parseListener(h, 'beforerender'),
-                    render: GinToolkit.parseListener(h, 'render'),
-                    destroy: GinToolkit.parseListener(h, 'destroy'),
-                    size: GinToolkit.parseListener(h, 'size'),
-                    play: GinToolkit.parseListener(h, 'play'),
-                    stop: GinToolkit.parseListener(h, 'stop')
+                if (s.parent !== null && !(s.parent instanceof GinLayer)) {
+                    GinToolkit.error('parent must be GinLayer instance or null');
+                    return;
                 }
-            };
-            
-            if (s.parent) {
-                // TODO: change it
-                data.offsetX = s.parent.offsetX + s.parent.left;
-                data.offsetY = s.parent.offsetY + s.parent.top;
-            }
-            
-            canvas = document.createElement('canvas');
-            style = canvas.style;
-            style.position = 'absolute';
-            style.left = 0;
-            style.top = 0;
-            style.width = data.style.width + 'px';
-            style.height = data.style.height + 'px';
-            canvas.width = data.style.width;
-            canvas.height = data.style.height;
-            element.appendChild(canvas);
-            data.canvas = canvas;
-            data.context = layer.getContext(data.canvas);
-            data.parentElement.appendChild(element);
-            
-            if (data.attachment && data.attachment.nodeType) {
-                element.appendChild(data.attachment);
-            }
-            
-            if (GinToolkit.getSetting(s.hidden, false, function(value) {
-                return value === true? value: undefined;
-            })) {
-                layer.hide();
-            }
-            
-            // TODO: register event listener on core
-            
-            GinToolkit.parseListener(h, 'start').call(layer);
-            
-            if (GinToolkit.getSetting(s.autoPlay, true, function(value) {
-                return value === false? value: undefined;
-            })) {
-                layer.play();
-            }
-            
-            if (GinToolkit.getSetting(s.dialogMode, false, function(value) {
-                return value === true? value: undefined;
-            })) {
-                layer.dialog(true);
-            }
-            
-            return layer;
-        };
+                
+                if (!s.core) {
+                    GinToolkit.error('core must be set');
+                    return;
+                }
 
-        this.prototype = {
+                if (!s.name) {
+                    GinToolkit.error('layer must have a string name');
+                    return;
+                }
+                
+                if (!s.parentElement) {
+                    GinToolkit.error('parent element must be set');
+                    return;
+                }
+                
+                element = document.createElement('div');
+                element.style.position = 'absolute';
+                element.style.display = 'block';
+
+                data = layer._ = {
+                    name: s.name,
+                    parent: s.parent,
+                    core: s.core,
+                    element: element,
+                    parentElement: s.parentElement,
+                    canvas: null,
+                    context: null,
+                    layers: {},
+                    newStyle: {},
+                    data: GinToolkit.getSetting(s.data, {}),
+                    dataHooks: {},
+                    offsetX: 0,
+                    offsetY: 0,
+                    detached: s.parent? false: true,
+                    dialogMode: false,
+                    attachment: GinToolkit.getSetting(s.attachment, null, function(value) {
+                        if (!value || !value.nodeType) {
+                            GinToolkit.error('attachment must be a DOM element');
+                            return;
+                        }
+                        
+                        return value;
+                    }),
+                    style: {
+                        width: GinToolkit.getSetting(s.width, 0, GIN_REGEXP_NUMBER, function(value) {
+                            if (value <= 0) {
+                                return;
+                            }
+                            
+                            element.style.width = value + 'px';
+                            return value;
+                        }),
+                        height: GinToolkit.getSetting(s.height, 0, GIN_REGEXP_NUMBER, function(value) {
+                            if (value <= 0) {
+                                return;
+                            }
+                            
+                            element.style.height = value + 'px';
+                            return value;
+                        }),
+                        left: GinToolkit.getSetting(s.left, 0, GIN_REGEXP_NUMBER, function(value) {
+                            element.style.left = value + 'px';
+                            return value;
+                        }),
+                        top: GinToolkit.getSetting(s.top, 0, GIN_REGEXP_NUMBER, function(value) {
+                            element.style.top = value + 'px';
+                            return value;
+                        })
+                    },
+                    listeners: {
+                        beforerender: GinToolkit.parseListener(h, 'beforerender'),
+                        render: GinToolkit.parseListener(h, 'render'),
+                        destroy: GinToolkit.parseListener(h, 'destroy'),
+                        size: GinToolkit.parseListener(h, 'size'),
+                        play: GinToolkit.parseListener(h, 'play'),
+                        stop: GinToolkit.parseListener(h, 'stop')
+                    }
+                };
+                
+                if (s.parent) {
+                    // TODO: change it
+                    data.offsetX = s.parent.offsetX + s.parent.left;
+                    data.offsetY = s.parent.offsetY + s.parent.top;
+                }
+                
+                canvas = document.createElement('canvas');
+                style = canvas.style;
+                style.position = 'absolute';
+                style.left = 0;
+                style.top = 0;
+                style.width = data.style.width + 'px';
+                style.height = data.style.height + 'px';
+                canvas.width = data.style.width;
+                canvas.height = data.style.height;
+                element.appendChild(canvas);
+                data.canvas = canvas;
+                data.context = layer.getContext(data.canvas);
+                data.parentElement.appendChild(element);
+                
+                if (data.attachment && data.attachment.nodeType) {
+                    element.appendChild(data.attachment);
+                }
+                
+                if (GinToolkit.getSetting(s.hidden, false, function(value) {
+                    return value === true? value: undefined;
+                })) {
+                    layer.hide();
+                }
+                
+                // TODO: register event listener on core
+                
+                GinToolkit.parseListener(h, 'start').call(layer);
+                
+                if (GinToolkit.getSetting(s.autoPlay, true, function(value) {
+                    return value === false? value: undefined;
+                })) {
+                    layer.play();
+                }
+                
+                if (GinToolkit.getSetting(s.dialogMode, false, function(value) {
+                    return value === true? value: undefined;
+                })) {
+                    layer.dialog(true);
+                }
+                
+                return layer;
+            },
+        
             layer: function(name, settings, listeners) {
                 var s = settings || {},
                     names = name,
@@ -1279,7 +1236,7 @@ var GIN_FPS_DEFAULT = 30,
                     return this;
                 }
                 
-                var e = _GinLayer_cloneEvent.call(this),
+                var e = _cloneEvent.call(this),
                     data = this._;
                 
                 e.context = data.context;
@@ -1343,19 +1300,19 @@ var GIN_FPS_DEFAULT = 30,
                 return this;
             },
             beforerender: function(listener) {
-                return _GinLayer_addOrCallListener.call(this,
+                return _addOrCallListener.call(this,
                     'beforerender', listener, this._.playing, this._.playing, function() {
-                        return _GinLayer_cloneEvent.call(this);
+                        return _cloneEvent.call(this);
                     });
             },
             render: function(listener) {
-                return _GinLayer_addOrCallListener.call(this,
+                return _addOrCallListener.call(this,
                     'render', listener, false, this._.playing, function() {
                         this.draw(this._.listeners.render);
                     });
             },
             destroy: function(listener) {
-                return _GinLayer_addOrCallListener.call(this,
+                return _addOrCallListener.call(this,
                     'destroy', listener, true, true, function() {
                         var parent = this._.parent;
                         
@@ -1365,19 +1322,19 @@ var GIN_FPS_DEFAULT = 30,
                     });
             },
             play: function(listener) {
-                return _GinLayer_addOrCallListener.call(this,
+                return _addOrCallListener.call(this,
                     'play', listener, !this._.playing, false, function() {
                         this._.playing = true;
                     });
             },
             stop: function(listener) {
-                return _GinLayer_addOrCallListener.call(this,
+                return _addOrCallListener.call(this,
                     'stop', listener, this._.playing, false, function() {
                         this._.playing = false;
                     });
             },
             size: function(listener) {
-                return _GinLayer_addOrCallListener.call(this,
+                return _addOrCallListener.call(this,
                     'size', listener, true, true, function() {
                         return {
                             width: this.core().width(),
@@ -1408,25 +1365,25 @@ var GIN_FPS_DEFAULT = 30,
                 return canvas.getContext('2d');
             }
         };
-    }),
+    })()),
     
-    GinEventHistory = _class(function() {
-        this.create = function() {
-            var history = new this();
-            
-            history._ = {
-                history: {
-                    current: 0,
-                    last: 0,
-                    cursorLast: 0
-                },
-                log: {}
-            };
-            
-            return history;
-        };
+    GinEventHistory = Class(null, (function() {
+        return {
+            init: function() {
+                var history = new this();
+                
+                history._ = {
+                    history: {
+                        current: 0,
+                        last: 0,
+                        cursorLast: 0
+                    },
+                    log: {}
+                };
+                
+                return history;
+            },
         
-        this.prototype = {
             add: function(e) {
                 var history = this._.history,
                     log = this._.log;
@@ -1501,12 +1458,14 @@ var GIN_FPS_DEFAULT = 30,
                 return true;
             }
         };
-    }),
+    })()),
     
     // define the Gin and GinLayers
     Gin = window.$G = window.Gin = function(id, settings, listeners) {
         return GinCore.create(id, settings, listeners);
     };
 
-    Gin.extend = GinCore.prototype.extend;
+    Gin.extend = function() {
+        return GinLayer.extend.apply(GinLayer, arguments);
+    };
 })(window);
