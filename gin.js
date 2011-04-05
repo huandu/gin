@@ -35,9 +35,9 @@ var GIN_FPS_DEFAULT = 30,
     GIN_REGEXP_BLANK = /\s+/,
     GIN_REGEXP_NUMBER = /^-?\d+(\.\d*)?$/,
     
-    GIN_REGEXP_ANDROID = /Android/,
-    GIN_REGEXP_WEBKIT = /AppleWebKit/,
-    GIN_REGEXP_IPHONE = /(iPhone)|(iOS)/,
+    //GIN_REGEXP_ANDROID = /Android/,
+    //GIN_REGEXP_WEBKIT = /AppleWebKit/,
+    //GIN_REGEXP_IPHONE = /(iPhone)|(iOS)/,
 
     GIN_EVENT_MOUSEMOVE_MAX_HISTORY = 300,
 
@@ -90,6 +90,7 @@ var GIN_FPS_DEFAULT = 30,
         return klass;
     },
     
+    /** @class */
     GinToolkit = Class(null, (function() {
         var _logger = function(logger, args) {
             try {
@@ -109,7 +110,7 @@ var GIN_FPS_DEFAULT = 30,
             }
         };
 
-        return {
+        return /** @lends GinToolkit */{
             debug: function() {
                 _logger('info', arguments);
             },
@@ -188,7 +189,24 @@ var GIN_FPS_DEFAULT = 30,
     })(), true),
     
     GinCore = Class(null, (function() {
-        return {
+        var _callListener = function(eventName, e) {
+            var pool = this._.listeners[eventName],
+                layer = this._.layer,
+                i;
+            
+            if (!pool) {
+                return this;
+            }
+            
+            for (i in pool) {
+                pool[i].call(layer, e);
+            }
+            
+            return this;
+        };
+        
+        return /** @lends GinCore.prototype */ {
+            /** @constructs */
             init: function(id, settings, listeners) {
                 if (!id) {
                     GinToolkit.error('id cannot be empty');
@@ -268,12 +286,13 @@ var GIN_FPS_DEFAULT = 30,
                         return value === true? value: undefined;
                     }),
                     listeners: {
-                        start: GinToolkit.parseListener(h, 'start'),
-                        pause: GinToolkit.parseListener(h, 'pause'),
-                        stop: GinToolkit.parseListener(h, 'stop'),
-                        restart: GinToolkit.parseListener(h, 'restart'),
-                        blur: GinToolkit.parseListener(h, 'blur'),
-                        focus: GinToolkit.parseListener(h, 'focus')
+                        ginstart: [],
+                        ginpause: [],
+                        ginstop: [],
+                        ginrestart: [],
+                        ginblur: [],
+                        ginfocus: [],
+                        ginsize: []
                     }
                 };
                 
@@ -305,6 +324,9 @@ var GIN_FPS_DEFAULT = 30,
                     GinToolkit.error('cannot create default layer instance');
                     return;
                 }
+                
+                // register gin* event handlers
+                gin.register(h);
                 
                 // only this.resize is able to change root layer's width/height.
                 // TODO: refactory this
@@ -419,7 +441,10 @@ var GIN_FPS_DEFAULT = 30,
                         }
                     }
                 })(this), 1);
+                
                 data.state = GIN_STATE_STARTED;
+                _callListener.call(this, 'ginstart');
+                
                 data.layer.play();
                 GinToolkit.debug('gin is started');
                 
@@ -438,6 +463,8 @@ var GIN_FPS_DEFAULT = 30,
                 }
                 
                 data.state = GIN_STATE_PAUSED;
+                _callListener.call(this, 'ginpause');
+                
                 data.layer.stop();
                 GinToolkit.debug('gin is paused');
                 
@@ -462,58 +489,59 @@ var GIN_FPS_DEFAULT = 30,
                 }
                 
                 data.state = GIN_STATE_STOPPED;
+                _callListener.call(this, 'ginstop');
+                
                 data.layer.stop();
                 GinToolkit.debug('gin is stopped');
                 
                 return this;
             },
             restart: function() {
-                if (this._.state != GIN_STATE_STARTED && this._.state != GIN_STATE_PAUSED) {
+                var data = this._;
+                
+                if (data.state != GIN_STATE_STARTED && data.state != GIN_STATE_PAUSED) {
                     GinToolkit.error('only GIN_STATE_STARTED and GIN_STATE_PAUSED can be restarted.'
-                        + ' [state: ' + this._.state + ']');
+                        + ' [state: ' + data.state + ']');
                     return this;
                 }
+                
+                _callListener.call(this, 'ginrestart');
                 
                 this.stop();
                 this.start();
                 return this;
             },
-            blur: function(listener) {
-                if (listener instanceof Function) {
-                    this._.listeners.blur = listener;
-                    return this;
-                }
+            blur: function() {
+                var data = this._;
                 
-                if (this._.hasFocus) {
-                    this._.hasFocus = false;
-                    this._.listeners.blur.call(this);
+                if (data.hasFocus) {
+                    data.hasFocus = false;
+                    _callListener.call(this, 'ginblur');
                     
-                    if (this._.autoPause) {
+                    if (data.autoPause) {
                         this.pause();
                     }
                 }
             },
-            focus: function(listener) {
-                if (listener instanceof Function) {
-                    this._.listeners.focus = listener;
-                    return this;
-                }
+            focus: function() {
+                var data = this._;
                 
-                if (!this._.hasFocus) {
-                    this._.hasFocus = true;
-                    this._.listeners.focus.call(this);
+                if (!data.hasFocus) {
+                    data.hasFocus = true;
+                    _callListener.call(this, 'ginfocus');
                     
-                    if (this._.autoPause) {
+                    if (data.autoPause) {
                         this.start();
                     }
                 }
             },
             resize: function(width, height) {
-                var w = width || this._.element.clientWidth,
-                    h = height || this._.element.clientHeight,
-                    element = this._.element,
-                    receiver = this._.receiver,
-                    layer = this._.layer,
+                var data = this._,
+                    element = data.element,
+                    w = width || element.clientWidth,
+                    h = height || element.clientHeight,
+                    receiver = data.receiver,
+                    layer = data.layer,
                     needResize = false;
                 
                 if (isNaN(w) || w < 0 || isNaN(h) || h < 0) {
@@ -521,33 +549,32 @@ var GIN_FPS_DEFAULT = 30,
                     return this;
                 }
                 
-                if (w != this._.width) {
+                if (w != data.width) {
                     needResize = true;
-                    this._.width = w;
+                    data.width = w;
                     receiver.style.width = w + 'px';
                     layer.width(w);
                     
-                    if (w != this._.element.clientWidth) {
+                    if (w != element.clientWidth) {
                         element.style.width = w + 'px';
                         element.width = w;
                     }
                 }
                 
-                if (h != this._.height) {
+                if (h != data.height) {
                     needResize = true;
-                    this._.height = h;
+                    data.height = h;
                     receiver.style.height = h + 'px';
                     layer.height(h);
                     
-                    if (h != this._.element.clientHeight) {
+                    if (h != element.clientHeight) {
                         element.style.height = h + 'px';
                         element.height = h;
                     }
                 }
                 
                 if (needResize) {
-                    // TODO: change it to this.size()
-                    layer.size();
+                    _callListener.call(this, 'ginsize');
                 }
             },
             width: function() {
@@ -578,6 +605,50 @@ var GIN_FPS_DEFAULT = 30,
                 e.clientX = cache.clientX - offsetX;
                 e.clientY = cache.clientY - offsetY;
                 return e;
+            },
+            register: function(eventName, listener) {
+                var listeners = this._.listeners,
+                    pool, i;
+                
+                if (typeof eventName == 'object') {
+                    for (i in eventName) {
+                        arguments.callee.call(this, i, eventName[i]);
+                    }
+                    
+                    return this;
+                }
+                
+                pool = listeners[eventName];
+                
+                if (pool === undefined) {
+                    return this;
+                }
+                
+                if (!(listener instanceof Function)) {
+                    GinToolkit.error('listener must be a function');
+                    return this;
+                }
+                
+                pool.push(listener);
+                return this;
+            },
+            unregister: function(eventName, listener) {
+                var listeners = this._.listeners,
+                    pool = listeners[eventName],
+                    i;
+                
+                if (pool === undefined) {
+                    GinToolkit.error('unknown event name [event: ' + eventName + ']');
+                    return this;
+                }
+                
+                for (i in pool) {
+                    if (pool[i] === listener) {
+                        delete pool[i];
+                    }
+                }
+                
+                return this;
             }
         };
     })()),
@@ -645,7 +716,8 @@ var GIN_FPS_DEFAULT = 30,
             this.core().focus();
         };
         
-        return {
+        return /** @lends GinListener.prototype */ {
+            /** @constructs */
             init: function(core) {
                 GinToolkit.assert(core, 'invalid core');
                 
@@ -889,7 +961,8 @@ var GIN_FPS_DEFAULT = 30,
             // TODO: finish it
         };
         
-        return {
+        return /** @lends GinLayer.prototype */ {
+            /** @constructs */
             init: function(settings, listeners) {
                 var layer = new this(),
                     s = settings || {},
@@ -1010,7 +1083,8 @@ var GIN_FPS_DEFAULT = 30,
                     layer.hide();
                 }
                 
-                // TODO: register event listener on core
+                // register gin* event listener on core
+                data.core.register(h);
                 
                 GinToolkit.parseListener(h, 'start').call(layer);
                 
@@ -1368,7 +1442,8 @@ var GIN_FPS_DEFAULT = 30,
     })()),
     
     GinEventHistory = Class(null, (function() {
-        return {
+        return /** @lends GinEventHistory.prototype */ {
+            /** @constructs */
             init: function() {
                 var history = new this();
                 
