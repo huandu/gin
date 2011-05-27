@@ -233,9 +233,14 @@ var GIN_FPS_DEFAULT = 30,
                     return;
                 }
                 
-                // initialize gin attributes.
+                // receiver is the div receive all keyboard/mouse events
+                receiver = document.createElement('div');
+                receiver._ = {core: gin};
+                
+               // initialize gin attributes.
                 data = gin._ = {
                     element: element,
+                    receiver: receiver,
                     state: GIN_STATE_INIT,
                     framePrepared: false,
                     lastResize: now,
@@ -298,6 +303,21 @@ var GIN_FPS_DEFAULT = 30,
                 
                 data.interval = 1000. / data.fps;
                 
+                // init event listener layer
+                style = receiver.style;
+                style.position = 'absolute';
+                style.left = 0;
+                style.top = 0;
+                style.width = data.width + 'px';
+                style.height = data.height + 'px';
+                style.zIndex = GIN_ZINDEX_EVENT_LAYER;
+                style.outline = 0;
+                receiver.tabIndex = 1;
+                element.appendChild(receiver);
+                receiver.focus();
+                
+                data.listener.bind(receiver);
+                
                 // create root layer. it's the parent of any other layers.
                 layer = GinLayer.create({
                     width: data.width,
@@ -333,24 +353,6 @@ var GIN_FPS_DEFAULT = 30,
                 GinToolkit.setFriendMethod(gin.resize, layer.width);
                 GinToolkit.setFriendMethod(gin.resize, layer.height);
                 data.layer = layer;
-                
-                // receiver is the div receive all keyboard/mouse events
-                receiver = document.createElement('div');
-                data.receiver = receiver;
-                receiver._ = {core: gin};
-                style = receiver.style;
-                style.position = 'absolute';
-                style.left = 0;
-                style.top = 0;
-                style.width = data.width + 'px';
-                style.height = data.height + 'px';
-                style.zIndex = GIN_ZINDEX_EVENT_LAYER;
-                style.outline = 0;
-                receiver.tabIndex = 1;
-                element.appendChild(receiver);
-                receiver.focus();
-                
-                data.listener.bind(receiver);
                 
                 if (GinToolkit.getSetting(s.autoStart, true, function(value) {
                     return value === false? value: undefined;
@@ -525,8 +527,9 @@ var GIN_FPS_DEFAULT = 30,
             },
             focus: function() {
                 var data = this._;
-                
+               
                 if (!data.hasFocus) {
+                    data.receiver.focus();  
                     data.hasFocus = true;
                     _callListener.call(this, 'ginfocus');
                     
